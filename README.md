@@ -9,7 +9,7 @@
 - **CATIA-Copilot-PLM**：DocDoku PLM 的深度二次开发，专业的 PLM 数据模型（PartMaster/Revision/Iteration）、CATIA 运行时集成、实时 3D 协同
 - **myPDM**：现代化 FastAPI + React 技术栈，完整的变更执行闭环（ECR/ECO）、库存管理、AI 助手
 
-详细设计见 [`docs/fusion-roadmap.md`](docs/fusion-roadmap.md)。
+详细设计见 [`docs/decisions/project-comparison.md`](docs/decisions/project-comparison.md)，里程碑计划见 [`docs/collaboration/milestones.md`](docs/collaboration/milestones.md)。
 
 ## 目录结构
 
@@ -32,4 +32,4 @@ docker compose up -d
 
 ## 协作方式
 
-详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 和 [`docs/collaboration-and-milestones.md`](docs/collaboration-and-milestones.md)。
+详见 [`CONTRIBUTING.md`](CONTRIBUTING.md) 和 [`docs/collaboration/milestones.md`](docs/collaboration/milestones.md)。
