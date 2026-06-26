@@ -1,6 +1,6 @@
 # 贡献指南
 
-本文档是两人协作开发 plm-unified 的约定，详细内容参见 [`docs/collaboration-and-milestones.md`](docs/collaboration-and-milestones.md)。
+本文档是两人协作开发 plm-unified 的约定，详细内容参见 [`docs/collaboration/milestones.md`](docs/collaboration/milestones.md)。
 
 ---
 
