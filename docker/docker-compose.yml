@@ -1,7 +1,7 @@
 services:
   # ── 数据库 ──────────────────────────────────────────────
   db:
-    image: postgres:16
+    image: postgres:15
     container_name: plm_db
     environment:
       POSTGRES_DB: plm_unified
@@ -10,7 +10,7 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5435:5432"  # 宿主机 5435，避免与已有 PostgreSQL 冲突
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U plm -d plm_unified"]
       interval: 10s
@@ -22,11 +22,11 @@ services:
     image: redis:7-alpine
     container_name: plm_redis
     ports:
-      - "6379:6379"
+      - "6380:6379"  # 宿主机 6380，避免与已有 Redis 冲突
 
   # ── Zookeeper（Kafka 依赖）───────────────────────────────
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
+    image: confluentinc/cp-zookeeper:7.6.1
     container_name: plm_zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -34,7 +34,7 @@ services:
 
   # ── Kafka ───────────────────────────────────────────────
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
+    image: confluentinc/cp-kafka:7.6.1
     container_name: plm_kafka
     depends_on:
       - zookeeper
@@ -44,25 +44,26 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
-      - "9092:9092"
+      - "9093:9092"  # 宿主机 9093，避免与已有 Kafka 冲突
 
   # ── Elasticsearch ────────────────────────────────────────
-  es:
-    image: elasticsearch:8.11.0
-    container_name: plm_es
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    ports:
-      - "9200:9200"
-    volumes:
-      - es_data:/usr/share/elasticsearch/data
+  # M1 阶段暂不启动，搜索功能在 M2 后启用
+  # es:
+  #   image: elasticsearch:8.11.0
+  #   container_name: plm_es
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+  #   ports:
+  #     - "9200:9200"
+  #   volumes:
+  #     - es_data:/usr/share/elasticsearch/data
 
   # ── FastAPI 后端 ─────────────────────────────────────────
   backend:
     build:
-      context: ./backend
+      context: ../backend
       dockerfile: Dockerfile
     container_name: plm_backend
     depends_on:
@@ -79,12 +80,13 @@ services:
     volumes:
       - vault_data:/vault
     ports:
-      - "8000:8000"
+      - "8010:8000"  # 宿主机 8010，避免与 DocDoku 冲突
 
   # ── CAD 转换服务 ─────────────────────────────────────────
   conversion:
     build:
-      context: ./conversion
+      context: ../conversion
+      dockerfile: Dockerfile.jvm
     container_name: plm_conversion
     depends_on:
       - kafka
@@ -97,5 +99,4 @@ services:
 
 volumes:
   db_data:
-  es_data:
   vault_data:

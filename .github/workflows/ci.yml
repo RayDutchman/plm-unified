@@ -47,7 +47,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true  # 拉取 Git LFS 中的 wheels
 
       - name: Build conversion Docker image
-        run: docker build -t plm-conversion:ci ./conversion
-        continue-on-error: true  # 转换服务构建可能需要特殊环境，不阻塞主流程
+        run: docker build -f Dockerfile.jvm -t plm-conversion:ci ./conversion

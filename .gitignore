@@ -37,3 +37,5 @@ Thumbs.db
 
 # Alembic
 alembic/versions/__pycache__/
+# conversion/wheels/ 由 Git LFS 管理（已移除 ignore 规则）
+conversion/conversion-service/target/
