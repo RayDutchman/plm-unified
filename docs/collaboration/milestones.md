@@ -1,6 +1,6 @@
 # 协作约定与里程碑计划
 
-> 本文档是两人协作开发新一代 PLM 系统的根基性约定，与 `新一代 PLM 系统融合路径规划.md` 配套使用。
+> 本文档是两人协作开发新一代 PLM 系统的根基性约定。
 > 所有里程碑以功能测试通过为达成条件，不绑定日期，时间用相对周数（T+N）估算。
 
 ---
@@ -136,19 +136,25 @@ feat(part-api): 实现签入签出状态机
 **所有后续工作的前提，全部由 A 完成后方可启动 M1。**
 **理由**：初始化工作由熟悉本项目结构的 A 独立完成，避免交叉等待，确保 B 进入时已有可运行的环境。
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 0.1 | 创建 GitHub 新仓库，B 加为 Collaborator | A | 串行起点 |
-| 0.2 | 建立分支策略，创建 `main` / `dev` 分支，写 `CONTRIBUTING.md`（引用本文档） | A | → 0.1 |
-| 0.3 | 复制 conversion 服务到 `/conversion`，不做任何修改 | A | ‖ 0.2 |
-| 0.4 | 复制 sync.py 到 `/scripts/sync.py` | A | ‖ 0.2 |
-| 0.5 | 复制 `fusion-roadmap.md`、本文档到 `/docs` | A | ‖ 0.2 |
-| 0.6 | 从 myPDM 复制 React 前端代码到 `/frontend` | A | ‖ 0.2 |
-| 0.7 | 搭建 FastAPI 项目脚手架（参考 myPDM `/backend` 目录结构：routers/models/schemas/crud 分层，Dockerfile，docker-compose 骨架，健康检查接口） | A | ‖ 0.2 |
-| 0.8 | 抓包记录 DocDoku 发往 Kafka topic `CONVERT` 的消息格式，写入 `/docs/kafka-message-format.md` | A | ‖ 0.2 |
-| 0.9 | 配置 GitHub Actions：提交时自动运行 `docker compose build`，确保镜像可构建 | A | → 0.7 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 0.1 | 创建 GitHub 新仓库（`RayDutchman/plm-unified`），B 加为 Collaborator | A | 串行起点 | ✅ |
+| 0.2 | 建立分支策略，创建 `main` / `dev` 分支，写 `CONTRIBUTING.md` | A | → 0.1 | ✅ |
+| 0.3 | 将已升级的 conversion 服务迁入 `/conversion`（含 Dockerfile.jvm、离线 wheels、预编译 jar） | A | ‖ 0.2 | ✅ |
+| 0.4 | 复制 sync.py 到 `/scripts/sync.py` | A | ‖ 0.2 | ✅ |
+| 0.5 | 整理 `/docs`：将两个旧项目的有效文档迁入，按 architecture/integration/reference/decisions/collaboration/setup 分类，新增 README.md 导航索引 | A | ‖ 0.2 | ✅ |
+| 0.6 | 从 myPDM 复制 React 前端代码到 `/frontend` | A | ‖ 0.2 | ✅ |
+| 0.7 | 搭建 FastAPI 项目脚手架（routers/models/schemas/crud 分层，Dockerfile，docker-compose 骨架，健康检查接口） | A | ‖ 0.2 | ✅ |
+| 0.8 | 记录 DocDoku Kafka topic `CONVERT` 消息格式，写入 `/docs/integration/kafka-message-format.md` | A | ‖ 0.2 | ✅ |
+| 0.9 | 配置 GitHub Actions CI（backend/frontend/conversion 三个 build job，conversion job 加 `lfs: true`） | A | → 0.7 | ✅ |
 
-**✅ M0 达成条件**：`docker compose up` 后端返回健康检查 200，B 能 clone 仓库并成功启动本地环境。
+**实际完成情况与原计划的差异：**
+
+- **0.3**：原计划"不做任何修改"复制 conversion。实际迁入的是已改造完毕的新版本（Dockerfile.jvm 基础镜像从 openjdk:8-jre 升级到 debian:bookworm-slim + OpenJDK 17，转换脚本从 FreeCAD OBJ 换为 cadquery-ocp GLB，wheels 通过 git-lfs 纳入仓库）。这是比原计划更完整的迁移。
+- **0.5**：原计划只是"复制文档"。实际做了完整的双项目文档整合：从 CATIA-Copilot-PLM 和 myPDM 筛选有价值的文档迁入，重新按功能分类，删除重复和已过期内容，新建 data-model.md、containers.md、local-dev-guide.md 等原创文档。
+- **docker-compose 端口**：因本机已运行 DocDoku 旧服务（占用 5432/6379/9092/8000），宿主机端口改为 5435/6380/9093/8010。容器内互访端口不变，不影响功能。
+
+**✅ M0 达成条件**：`docker compose up -d` 后端健康检查返回 200 ✅，B 能 clone 仓库并成功启动本地环境 ✅。
 
 ---
 
