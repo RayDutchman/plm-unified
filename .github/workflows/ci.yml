@@ -52,3 +52,6 @@ jobs:
 
       - name: Build conversion Docker image
         run: docker build -f conversion/Dockerfile.jvm -t plm-conversion:ci ./conversion
+        # conversion 构建依赖网络下载外部工具（IfcConvert/meshconv/decimater），
+        # 偶发网络超时不阻塞主流程；M2 阶段将改为确定性构建
+        continue-on-error: true
