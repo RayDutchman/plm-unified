@@ -27,17 +27,25 @@
 ```
 main       ← 只接受 PR 合并，始终保持可运行状态（对应里程碑节点）
 dev        ← 集成分支，功能完成后先合并到 dev 联调
-feat/xxx   ← 各自的功能分支，如 feat/fastapi-part-api、feat/three-upgrade
-fix/xxx    ← Bug 修复分支
+feat/xxx   ← 各自的功能分支，从 dev 切出，如 feat/fastapi-part-api、feat/three-upgrade
+fix/xxx    ← Bug 修复分支，从 dev 切出
 ```
+
+**feat/ 和 fix/ 分支始终从 `dev` 切出，不从 `main`。**
 
 工作流：
 
 ```
+# 开始新功能
+git checkout dev && git pull origin dev
+git checkout -b feat/xxx
+
+# 开发完成后
 feat/xxx → PR → dev（联调通过）→ PR → main（里程碑达成）
 ```
 
-- AI 生成的代码同样必须经过 PR 流程，不直接推送到 `dev` 或 `main`
+- 不直接在 `dev` 或 `main` 上提交功能代码（M0 初始化阶段例外）
+- AI 生成的代码同样必须经过 PR 流程
 - 每个 PR 至少另一方 review 并 approve 后才可合并
 - `main` 的每次合并对应一个里程碑达成
 
