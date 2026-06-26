@@ -51,4 +51,4 @@ jobs:
           lfs: true  # 拉取 Git LFS 中的 wheels
 
       - name: Build conversion Docker image
-        run: docker build -f Dockerfile.jvm -t plm-conversion:ci ./conversion
+        run: docker build -f conversion/Dockerfile.jvm -t plm-conversion:ci ./conversion
