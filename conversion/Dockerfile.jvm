@@ -1,0 +1,106 @@
+### real image
+# debian:bookworm-slim (Debian 12) + OpenJDK 17 + cadquery-ocp (OpenCASCADE Python bindings)
+# Replaces: openjdk:8-jre (removed from Docker Hub) + FreeCAD 0.18 (headless color not supported)
+#
+# Key changes vs original:
+#   - Base OS: debian:buster (EOL) -> debian:bookworm-slim
+#   - JRE: openjdk:8-jre -> openjdk-17-jre-headless (Quarkus 1.2.1 supports Java 11+)
+#   - STEP converter: FreeCAD 0.18 + Mesh.export -> cadquery-ocp + pygltflib
+#     * OCC headless color reading via XDE (XCAFDoc_ColorTool)
+#     * Controllable triangulation quality (BRepMesh_IncrementalMesh)
+#     * Output: .glb (self-contained, no MTL sidecar)
+#   - run-java.sh: copied from local (no longer pulls from fabric8 image)
+FROM debian:bookworm-slim
+
+ARG CONVERTER_WHEELHOUSE_URL=""
+ARG CONVERTER_PIP_INDEX_URL=""
+ARG CONVERTER_PIP_EXTRA_INDEX_URL=""
+
+ENV JAVA_OPTIONS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
+ENV AB_ENABLED=jmx_exporter
+ENV IFCCONVERT_URL=https://github.com/IfcOpenShell/IfcOpenShell/releases/download/v0.5.0-preview2/IfcConvert-master-9ad68db-linux64.zip
+ENV MESHCONV_URL=http://www.patrickmin.com/meshconv/linux64/meshconv
+ENV DECIMATER_URL=https://github.com/docdoku/docdoku-plm-openmesh-decimater/raw/master/builds/decimater-linux-64.zip
+
+USER root
+
+# System packages:
+#   - openjdk-17-jre-headless: Java runtime for Quarkus service
+#   - python3 + pip: for convert_step_glb.py
+#   - libgl1 libxrender1 libsm6 libxt6: required shared libs for cadquery-ocp/OCC
+#   - assimp-utils: for DAE/DXF converter (unchanged)
+#   - wget + unzip: for downloading IFCConvert and meshconv
+RUN apt-get update -qqy \
+ && apt-get install -qqy --no-install-recommends \
+      openjdk-17-jre-headless \
+      python3 \
+      python3-pip \
+      libgl1 \
+      libglib2.0-0 \
+      libxrender1 \
+      libsm6 \
+      libxt6 \
+      assimp-utils \
+      wget \
+      unzip \
+ && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages for STEP->GLB conversion.
+# Strategy:
+#   1) 优先使用仓库内预置的 wheels/ 目录（离线安装，无需网络）
+#   2) 若未提供则尝试 CONVERTER_WHEELHOUSE_URL（内网 wheelhouse）
+#   3) 最终回退到 PyPI / 自定义镜像源
+COPY requirements-converter.txt /tmp/requirements-converter.txt
+COPY install-python-deps.sh /tmp/install-python-deps.sh
+# 将本地预置 wheels 复制进镜像（若目录不存在或为空，COPY 指令自动跳过）
+COPY wheels/ /tmp/wheels/
+RUN chmod +x /tmp/install-python-deps.sh \
+ && if [ "$(ls /tmp/wheels/*.whl 2>/dev/null | wc -l)" -gt "0" ]; then \
+      echo "[deps] installing from bundled wheels (offline)"; \
+      python3 -m pip install --break-system-packages --no-cache-dir \
+        --no-index --find-links /tmp/wheels/ \
+        -r /tmp/requirements-converter.txt; \
+    else \
+      CONVERTER_WHEELHOUSE_URL="${CONVERTER_WHEELHOUSE_URL}" \
+      CONVERTER_PIP_INDEX_URL="${CONVERTER_PIP_INDEX_URL}" \
+      CONVERTER_PIP_EXTRA_INDEX_URL="${CONVERTER_PIP_EXTRA_INDEX_URL}" \
+      /tmp/install-python-deps.sh /tmp/requirements-converter.txt; \
+    fi \
+ && rm -rf /tmp/install-python-deps.sh /tmp/requirements-converter.txt /tmp/wheels/
+
+# Create directories and download third-party conversion tools
+RUN mkdir /deployments \
+ && mkdir -p /data/vault /data/conversions \
+ && mkdir -p /opt/ifcconvert /opt/meshconv /opt/decimater \
+ && wget --quiet -O /opt/ifcconvert.zip ${IFCCONVERT_URL} \
+ && wget --quiet -O /opt/meshconv/meshconv ${MESHCONV_URL} \
+ && wget --quiet -O /opt/decimater.zip ${DECIMATER_URL} \
+ && unzip -qq /opt/ifcconvert.zip -d /opt/ifcconvert \
+ && unzip -qq /opt/decimater.zip -d /opt/ \
+ && chmod +x /opt/meshconv/meshconv \
+ && rm /opt/decimater.zip /opt/ifcconvert.zip
+
+COPY conversion-service/target/lib/* /deployments/lib/
+COPY conversion-service/target/*-runner.jar /deployments/app.jar
+
+# run-java.sh extracted locally from fabric8 image — no external dependency
+COPY run-java.sh /deployments/run-java.sh
+
+RUN mkdir /home/1001 \
+  && groupadd -g 1001 1001 \
+  && useradd -u 1001 -M -s /bin/bash 1001 -g root -d /home/1001 \
+  && chown -R 1001 /deployments \
+  && chmod -R 777 /deployments \
+  && chown -R 1001:root /deployments \
+  && chown -R 1001 /data \
+  && chown -R 1001 /opt \
+  && chmod -R 777 /data \
+  && chown -R 1001:root /data \
+  && chown -R 1001:root /home/1001
+
+USER 1001
+
+VOLUME ["/data/vault", "/data/conversions"]
+EXPOSE 8080
+
+ENTRYPOINT [ "/deployments/run-java.sh" ]

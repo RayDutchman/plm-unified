@@ -1,0 +1,102 @@
+services:
+  # ── 数据库 ──────────────────────────────────────────────
+  db:
+    image: postgres:15
+    container_name: plm_db
+    environment:
+      POSTGRES_DB: plm_unified
+      POSTGRES_USER: plm
+      POSTGRES_PASSWORD: plmpass
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5435:5432"  # 宿主机 5435，避免与已有 PostgreSQL 冲突
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plm -d plm_unified"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 缓存 ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: plm_redis
+    ports:
+      - "6380:6379"  # 宿主机 6380，避免与已有 Redis 冲突
+
+  # ── Zookeeper（Kafka 依赖）───────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: plm_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # ── Kafka ───────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: plm_kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9093:9092"  # 宿主机 9093，避免与已有 Kafka 冲突
+
+  # ── Elasticsearch ────────────────────────────────────────
+  # M1 阶段暂不启动，搜索功能在 M2 后启用
+  # es:
+  #   image: elasticsearch:8.11.0
+  #   container_name: plm_es
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+  #   ports:
+  #     - "9200:9200"
+  #   volumes:
+  #     - es_data:/usr/share/elasticsearch/data
+
+  # ── FastAPI 后端 ─────────────────────────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: plm_backend
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://plm:plmpass@db:5432/plm_unified
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_SECRET: change-this-in-production
+      VAULT_PATH: /vault
+    volumes:
+      - vault_data:/vault
+    ports:
+      - "8010:8000"  # 宿主机 8010，避免与 DocDoku 冲突
+
+  # ── CAD 转换服务 ─────────────────────────────────────────
+  conversion:
+    build:
+      context: ../conversion
+      dockerfile: Dockerfile.jvm
+    container_name: plm_conversion
+    depends_on:
+      - kafka
+      - backend
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      BACKEND_URL: http://backend:8000
+    volumes:
+      - vault_data:/vault
+
+volumes:
+  db_data:
+  vault_data:

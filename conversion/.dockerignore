@@ -1,0 +1,9 @@
+*
+!conversion-service/target/docdoku-plm-conversion-service-1.0.0-SNAPSHOT-jar-with-dependencies.jar
+!conversion-service/target/*-runner
+!conversion-service/target/*-runner.jar
+!conversion-service/target/lib/*
+!run-java.sh
+!install-python-deps.sh
+!requirements-converter.txt
+!wheels/

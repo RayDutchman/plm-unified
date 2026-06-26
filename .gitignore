@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.env.local
+
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# Docker
+docker/data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# vault（CAD 文件和 GLB，不入库）
+/vault/
+
+# Alembic
+alembic/versions/__pycache__/
+# conversion/wheels/ 由 Git LFS 管理（已移除 ignore 规则）
+conversion/conversion-service/target/
