@@ -38,3 +38,50 @@ def test_user_username_unique(db):
                 real_name="b", role="admin", status="active"))
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+def _make_ws_user(db):
+    from app.models import Workspace, User
+    ws = Workspace(name="w"); db.add(ws); db.commit(); db.refresh(ws)
+    u = User(workspace_id=ws.id, username="u", password_hash="x",
+             real_name="r", role="admin", status="active")
+    db.add(u); db.commit(); db.refresh(u)
+    return ws, u
+
+
+def test_part_three_layers_roundtrip(db):
+    from app.models import PartMaster, PartRevision, PartIteration
+    ws, u = _make_ws_user(db)
+    pm = PartMaster(workspace_id=ws.id, number="P-001", name="零件1",
+                    standard_part=False, author_id=u.id)
+    db.add(pm); db.commit(); db.refresh(pm)
+
+    rev = PartRevision(part_master_id=pm.id, version="A", status="WIP")
+    db.add(rev); db.commit(); db.refresh(rev)
+    assert rev.checkout_user_id is None
+
+    it = PartIteration(part_revision_id=rev.id, iteration=1, author_id=u.id)
+    db.add(it); db.commit(); db.refresh(it)
+    assert it.check_in_date is None
+
+
+def test_part_master_number_unique_per_workspace(db):
+    from app.models import PartMaster
+    ws, u = _make_ws_user(db)
+    db.add(PartMaster(workspace_id=ws.id, number="P-1", name="a", author_id=u.id))
+    db.commit()
+    db.add(PartMaster(workspace_id=ws.id, number="P-1", name="b", author_id=u.id))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_part_iteration_must_be_positive(db):
+    from app.models import PartMaster, PartRevision, PartIteration
+    ws, u = _make_ws_user(db)
+    pm = PartMaster(workspace_id=ws.id, number="P-2", name="a", author_id=u.id)
+    db.add(pm); db.commit()
+    rev = PartRevision(part_master_id=pm.id, version="A", status="WIP")
+    db.add(rev); db.commit()
+    db.add(PartIteration(part_revision_id=rev.id, iteration=0, author_id=u.id))
+    with pytest.raises(IntegrityError):
+        db.commit()
