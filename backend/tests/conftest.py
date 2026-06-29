@@ -3,7 +3,7 @@ import os
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-tests-only-xx")
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -18,6 +18,12 @@ def db():
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    # SQLite 默认不强制外键，需显式开启，才能测到 ondelete RESTRICT/CASCADE/SET NULL
+    @event.listens_for(engine, "connect")
+    def _enable_sqlite_fk(dbapi_con, con_record):
+        dbapi_con.execute("PRAGMA foreign_keys=ON")
+
     Base.metadata.create_all(bind=engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     session = TestingSessionLocal()

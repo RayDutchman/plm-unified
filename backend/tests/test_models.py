@@ -1,4 +1,7 @@
 """M1 数据地基：模型与约束测试（SQLite 内存库）。"""
+import uuid
+import pytest
+from sqlalchemy.exc import IntegrityError
 
 
 def test_database_module_exposes_base_and_get_db():
@@ -6,11 +9,6 @@ def test_database_module_exposes_base_and_get_db():
     assert Base is not None
     assert callable(get_db)
     assert SessionLocal is not None
-
-
-import uuid
-import pytest
-from sqlalchemy.exc import IntegrityError
 
 
 def test_workspace_and_user_roundtrip(db):
@@ -168,3 +166,29 @@ def test_metadata_has_all_nine_tables():
     }
     actual = set(Base.metadata.tables.keys())
     assert expected <= actual, f"缺表: {expected - actual}"
+
+
+def test_fk_cascade_delete_revision_removes_iterations(db):
+    """删除 PartRevision 应级联删除其下的 PartIteration（ondelete CASCADE）。"""
+    from app.models import PartMaster, PartRevision, PartIteration
+    ws, u = _make_ws_user(db)
+    pm = PartMaster(workspace_id=ws.id, number="P-CAS", name="a", author_id=u.id)
+    db.add(pm); db.commit()
+    rev = PartRevision(part_master_id=pm.id, version="A", status="WIP")
+    db.add(rev); db.commit()
+    it = PartIteration(part_revision_id=rev.id, iteration=1, author_id=u.id)
+    db.add(it); db.commit()
+    rev_id = rev.id
+
+    db.delete(rev); db.commit()
+    remaining = db.query(PartIteration).filter_by(part_revision_id=rev_id).count()
+    assert remaining == 0
+
+
+def test_fk_restrict_delete_workspace_with_user(db):
+    """工作空间下仍有用户时不可删除（ondelete RESTRICT）。"""
+    from app.models import Workspace
+    ws, u = _make_ws_user(db)
+    db.delete(ws)
+    with pytest.raises(IntegrityError):
+        db.commit()
