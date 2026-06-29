@@ -64,3 +64,19 @@ def test_authenticate_ignores_soft_deleted(db):
     from datetime import datetime
     u.deleted_at = datetime.utcnow(); db.commit()
     assert crud_user.get_user_by_username(db, "admin") is None
+
+
+def test_user_response_from_orm(db):
+    from app.schemas.user import UserResponse
+    u = _seed_user(db)
+    resp = UserResponse.model_validate(u)
+    assert resp.username == "admin"
+    assert resp.workspace_id == u.workspace_id
+    assert not hasattr(resp, "password_hash")
+
+
+def test_token_schema_defaults():
+    from app.schemas.auth import Token
+    t = Token(access_token="a")
+    assert t.token_type == "bearer"
+    assert t.refresh_token is None
