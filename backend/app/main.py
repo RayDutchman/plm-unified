@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers import auth
 from app.routers.parts import router as parts_router
 
 app = FastAPI(
@@ -21,7 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册路由
+# 路由挂载（统一 /api 前缀）
+app.include_router(auth.router, prefix="/api")
 app.include_router(parts_router)
 
 

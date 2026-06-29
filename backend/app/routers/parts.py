@@ -7,8 +7,6 @@
   PUT    /api/parts/{number}/{version}/checkout 签出
   PUT    /api/parts/{number}/{version}/checkin  签入
   PUT    /api/parts/{number}/{version}/undocheckout 撤销签出
-
-认证：Phase 1 使用 stub（current_user_id 固定），B 的 JWT 模块接好后替换 Depends。
 """
 from __future__ import annotations
 
@@ -27,6 +25,8 @@ from app.crud.part import (
     undocheckout,
 )
 from app.database import get_db
+from app.models import User
+from app.routers.auth import get_current_active_user
 from app.schemas.part import (
     CheckoutResponse,
     PartCreate,
@@ -38,24 +38,6 @@ router = APIRouter(prefix="/api/parts", tags=["零件管理"])
 
 
 # ---------------------------------------------------------------------------
-# 认证 Stub：B 的 JWT 模块完成后替换为 Depends(get_current_user)
-# ---------------------------------------------------------------------------
-
-# 默认工作空间 UUID（与 Alembic 迁移中的种子 workspace 一致）
-_DEFAULT_WORKSPACE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
-_DEFAULT_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000002")
-
-
-def _stub_current_user() -> dict:
-    """临时 stub，返回固定的当前用户信息。"""
-    return {
-        "id": _DEFAULT_USER_ID,
-        "username": "dev",
-        "workspace_id": _DEFAULT_WORKSPACE_ID,
-    }
-
-
-# ---------------------------------------------------------------------------
 # 1.6 CRUD 端点
 # ---------------------------------------------------------------------------
 
@@ -63,13 +45,13 @@ def _stub_current_user() -> dict:
 def create_part_endpoint(
     data: PartCreate,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(_stub_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     原子创建三层：PartMaster + PartRevision(A, WIP) + PartIteration(1)。
     创建后自动处于签出状态，需调用 checkin 才能冻结首个迭代。
     """
-    master = create_part(db, data, author_id=current_user["id"])
+    master = create_part(db, data, author_id=current_user.id)
     return _enrich_response(db, master)
 
 
@@ -129,7 +111,7 @@ def checkout_endpoint(
     version: str,
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(_stub_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     签出零件版本（加行锁）。
@@ -141,7 +123,7 @@ def checkout_endpoint(
         number=number,
         version=version,
         workspace_id=workspace_id,
-        current_user_id=current_user["id"],
+        current_user_id=current_user.id,
     )
     return CheckoutResponse(
         number=number,
@@ -160,7 +142,7 @@ def checkin_endpoint(
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     iteration_note: Optional[str] = Query(None, description="本次迭代备注"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(_stub_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     签入零件版本：
@@ -174,7 +156,7 @@ def checkin_endpoint(
         number=number,
         version=version,
         workspace_id=workspace_id,
-        current_user_id=current_user["id"],
+        current_user_id=current_user.id,
         iteration_note=iteration_note,
     )
     return CheckoutResponse(
@@ -193,7 +175,7 @@ def undocheckout_endpoint(
     version: str,
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     db: Session = Depends(get_db),
-    current_user: dict = Depends(_stub_current_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     撤销签出：丢弃未签入的草稿迭代，清签出锁。
@@ -204,7 +186,7 @@ def undocheckout_endpoint(
         number=number,
         version=version,
         workspace_id=workspace_id,
-        current_user_id=current_user["id"],
+        current_user_id=current_user.id,
     )
     return CheckoutResponse(
         number=number,

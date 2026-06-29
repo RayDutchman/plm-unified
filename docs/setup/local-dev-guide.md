@@ -144,4 +144,24 @@ docker compose logs kafka | grep "started"
 
 ---
 
-*最后更新：2026-06-26*
+## 认证（JWT）
+
+后端启动要求环境变量 `JWT_SECRET` **≥32 字符**，否则启动即报错（`security.py` 在导入时断言）。本地默认值见 `docker/docker-compose.yml`（仅供开发）。生产环境请用强随机值：
+
+```bash
+openssl rand -hex 32
+```
+
+**种子账号**：用户名 `admin` / 密码 `admin12345`（由迁移 `0002_seed_admin` 插入到默认工作空间，**首次登录后请改密**）。
+
+登录示例：
+
+```bash
+curl -X POST http://localhost:8010/api/auth/token \
+  -d "username=admin&password=admin12345"
+# 返回 {access_token, refresh_token, token_type}
+```
+
+---
+
+*最后更新：2026-06-29*

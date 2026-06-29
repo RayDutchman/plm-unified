@@ -75,7 +75,7 @@ services:
       DATABASE_URL: postgresql://plm:plmpass@db:5432/plm_unified
       REDIS_URL: redis://redis:6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JWT_SECRET: change-this-in-production
+      JWT_SECRET: dev-only-jwt-secret-change-in-prod-0123456789abcdef  # ≥32 字符；生产用 openssl rand -hex 32
       VAULT_PATH: /vault
     volumes:
       - vault_data:/vault
