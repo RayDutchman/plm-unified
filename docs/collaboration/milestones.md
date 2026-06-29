@@ -168,19 +168,21 @@ feat(part-api): 实现签入签出状态机
 
 ### M1：新 Schema + 认证 + 基础零件 API
 
-**M0 完成后启动。**
+**M0 完成后启动。** 详细执行方案见 [`m1-execution-plan.md`](./m1-execution-plan.md)。
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 1.1 | 设计新数据库 DDL（`part_masters`、`part_revisions`、`part_iterations`、`part_usage_links`、`cad_instances`、`geometries`、`binary_resources` 核心表） | **A 主写** | 串行起点 |
-| 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 |
-| 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 |
-| 1.4 | 基于通过的 DDL 写 Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 |
-| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 |
-| 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 |
-| 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 |
-| 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 |
-| 1.9 | 写 M1 验收测试脚本（pytest，覆盖创建零件→签出→签入流程） | AB | → 1.7 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 1.1 | 设计新数据库 DDL（`part_masters`、`part_revisions`、`part_iterations`、`part_usage_links`、`cad_instances`、`geometries`、`binary_resources` 核心表） | **A 主写** | 串行起点 | ✅（见 data-model.md） |
+| 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 | ⬜ |
+| 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 | ⬜ |
+| 1.4 | 基于通过的 DDL 写 ORM 模型 + Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 | ⬜ |
+| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 | ⬜ |
+| 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 | ⬜ |
+| 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 | ⬜ |
+| 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 | ⬜ |
+| 1.9 | 写 M1 验收测试脚本（pytest，覆盖创建零件→签出→签入流程） | AB | → 1.7 | ⬜ |
+
+> 分工微调（已与执行方案对齐）：1.4 由 B 同时承担 **SQLAlchemy ORM 模型**编写（原计划未指定归属），Alembic 用 `--autogenerate` 从模型生成。模型合并 dev 即"冻结"，A 据此启动 1.6/1.7。
 
 **✅ M1 达成条件**：验收测试全部通过——能通过 API 创建零件、签出、修改、签入，签出状态被第二个用户请求时返回 409，数据正确写入新库。
 
