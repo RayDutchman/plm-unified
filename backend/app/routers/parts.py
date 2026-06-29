@@ -61,6 +61,7 @@ def list_parts_endpoint(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     列出工作空间内所有未删除的零件，附最新版本状态。
@@ -93,6 +94,7 @@ def get_part_endpoint(
     number: str,
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
     """
     返回零件主数据及其全部版本和迭代信息。
