@@ -243,9 +243,15 @@ def checkin(
 
     now = _utcnow()
 
-    # 冻结当前草稿迭代
+    # 冻结当前草稿迭代（正常情况下必然存在，否则数据不一致）
     latest = _latest_iteration(db, revision.id)
-    if latest and latest.check_in_date is None:
+    if latest is None:
+        # 防御性检查：版本无任何迭代，属于数据异常，回滚并报 500
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"版本 {version!r} 无任何迭代记录，数据异常",
+        )
+    if latest.check_in_date is None:
         latest.check_in_date = now
         if iteration_note:
             latest.iteration_note = iteration_note
