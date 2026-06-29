@@ -156,3 +156,15 @@ def test_cad_instance_rotation_type_check(db):
                        rotation_type="BOGUS", order=0))
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+def test_metadata_has_all_nine_tables():
+    from app.database import Base
+    import app.models  # noqa: F401
+    expected = {
+        "workspaces", "users", "part_masters", "part_revisions",
+        "part_iterations", "binary_resources", "geometries",
+        "part_usage_links", "cad_instances",
+    }
+    actual = set(Base.metadata.tables.keys())
+    assert expected <= actual, f"缺表: {expected - actual}"
