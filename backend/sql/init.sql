@@ -3,6 +3,10 @@
 -- 里程碑：M1.1
 -- 设计参考：DocDoku PartMaster/PartRevision/PartIteration 三层模型
 -- 作者：A（主写）
+--
+-- ⚠️  注意：此文件仅作参考文档 / 本地快速初始化之用。
+--     正式环境建库请使用 Alembic：
+--       cd backend && alembic upgrade head
 -- =============================================================================
 
 -- 启用 UUID 扩展
@@ -23,15 +27,18 @@ CREATE TABLE IF NOT EXISTS workspaces (
     deleted_at  TIMESTAMPTZ                      -- 软删除标记
 );
 
--- 用户表（B 负责完善认证逻辑，此处仅定义核心字段供 FK 引用）
+-- 用户表（B 负责完善认证逻辑，字段体系采用 myPDM 风格）
 CREATE TABLE IF NOT EXISTS users (
     id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-    login           VARCHAR(50) NOT NULL UNIQUE,  -- 登录名（对应 DocDoku User.login）
-    email           VARCHAR(255) NOT NULL UNIQUE,
-    hashed_password VARCHAR(255) NOT NULL,
-    name            VARCHAR(100),                 -- 显示名
-    workspace_id    UUID REFERENCES workspaces(id) ON DELETE SET NULL,
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+    username        VARCHAR(64) NOT NULL UNIQUE,  -- 登录用户名
+    password_hash   VARCHAR(255) NOT NULL,
+    real_name       VARCHAR(64) NOT NULL,          -- 显示名
+    role            VARCHAR(32) NOT NULL,          -- 角色：admin/engineer/production/guest
+    department      VARCHAR(128),
+    phone           VARCHAR(32),
+    status          VARCHAR(32) NOT NULL DEFAULT 'active'  -- active/disabled
+        CONSTRAINT chk_users_status CHECK (status IN ('active', 'disabled')),
+    workspace_id    UUID REFERENCES workspaces(id) ON DELETE RESTRICT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ
@@ -50,7 +57,7 @@ CREATE TABLE IF NOT EXISTS part_masters (
     name            VARCHAR(255),                 -- 零件名称
     type            VARCHAR(50),                  -- 零件类型（可选分类）
     standard_part   BOOLEAN     NOT NULL DEFAULT FALSE,  -- 是否标准件
-    author_id       UUID        REFERENCES users(id) ON DELETE SET NULL,
+    author_id        UUID        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ,                  -- 软删除标记
@@ -68,28 +75,29 @@ COMMENT ON COLUMN part_masters.standard_part IS '是否标准件（外购/通用
 -- 对应 DocDoku PartRevision（PARTREVISION）
 -- 版本标识：A, B, C…（字母递增）
 -- 状态机：WIP → RELEASED → OBSOLETE
+-- 注：status 使用 VARCHAR + CHECK 而非 PostgreSQL ENUM，
+--     便于 Alembic 迁移中安全地增减枚举值
 -- =============================================================================
-
-CREATE TYPE part_revision_status AS ENUM ('WIP', 'RELEASED', 'OBSOLETE');
 
 CREATE TABLE IF NOT EXISTS part_revisions (
     id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     part_master_id  UUID        NOT NULL REFERENCES part_masters(id) ON DELETE CASCADE,
     version         VARCHAR(10) NOT NULL,         -- 版本号，如 "A", "B", "AA"
-    status          part_revision_status NOT NULL DEFAULT 'WIP',
+    status          VARCHAR(20) NOT NULL DEFAULT 'WIP'
+        CONSTRAINT chk_part_revision_status CHECK (status IN ('WIP', 'RELEASED', 'OBSOLETE')),
     description     TEXT,                         -- 版本描述（对应 DocDoku @Lob description）
 
     -- 签出信息（对应 DocDoku checkOutUser / checkOutDate）
-    checkout_user_id UUID       REFERENCES users(id) ON DELETE SET NULL,
+    checkout_user_id UUID       REFERENCES users(id) ON DELETE RESTRICT,
     checkout_date   TIMESTAMPTZ,
 
     -- 状态变更记录（对应 DocDoku releaseStatusChange / obsoleteStatusChange）
-    released_by_id  UUID        REFERENCES users(id) ON DELETE SET NULL,
+    released_by_id  UUID        REFERENCES users(id) ON DELETE RESTRICT,
     released_at     TIMESTAMPTZ,
-    obsoleted_by_id UUID        REFERENCES users(id) ON DELETE SET NULL,
+    obsoleted_by_id UUID        REFERENCES users(id) ON DELETE RESTRICT,
     obsoleted_at    TIMESTAMPTZ,
 
-    author_id       UUID        REFERENCES users(id) ON DELETE SET NULL,
+    author_id       UUID        REFERENCES users(id) ON DELETE RESTRICT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at      TIMESTAMPTZ,                  -- 软删除标记
@@ -122,7 +130,7 @@ CREATE TABLE IF NOT EXISTS part_iterations (
     -- 存储 binary_resources 表的 id
     native_cad_file_id UUID,                      -- FK 见下方 binary_resources 表创建后添加
 
-    author_id        UUID        REFERENCES users(id) ON DELETE SET NULL,
+    author_id       UUID        NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- 签入时间（对应 DocDoku checkInDate，签入后置为当前时间，WIP 时为 NULL）
     check_in_date    TIMESTAMPTZ,
@@ -175,13 +183,13 @@ CREATE TABLE IF NOT EXISTS geometries (
     -- 质量等级（对应 DocDoku Geometry.quality，0=最高，值越大越低）
     quality      INTEGER NOT NULL DEFAULT 0 CHECK (quality >= 0),
 
-    -- 包围盒（轴对齐 AABB，单位毫米）
-    x_min        DOUBLE PRECISION,
-    y_min        DOUBLE PRECISION,
-    z_min        DOUBLE PRECISION,
-    x_max        DOUBLE PRECISION,
-    y_max        DOUBLE PRECISION,
-    z_max        DOUBLE PRECISION
+    -- 包围盒（轴对齐 AABB，单位毫米，几何体必须有包围盒）
+    x_min        DOUBLE PRECISION NOT NULL,
+    y_min        DOUBLE PRECISION NOT NULL,
+    z_min        DOUBLE PRECISION NOT NULL,
+    x_max        DOUBLE PRECISION NOT NULL,
+    y_max        DOUBLE PRECISION NOT NULL,
+    z_max        DOUBLE PRECISION NOT NULL
 );
 
 COMMENT ON TABLE  geometries IS '几何体 LOD 层级，对应 DocDoku Geometry';
@@ -227,9 +235,8 @@ COMMENT ON COLUMN part_usage_links."order"             IS '在父装配体中的
 -- CAD 实例表（装配位置/变换矩阵）
 -- 对应 DocDoku CADInstance（CADINSTANCE）
 -- 一个 PartUsageLink 可以有多个 CADInstance（同一子件多次出现）
+-- 注：rotation_type 使用 VARCHAR + CHECK 而非 PostgreSQL ENUM
 -- =============================================================================
-
-CREATE TYPE rotation_type AS ENUM ('ANGLE', 'MATRIX');
 
 CREATE TABLE IF NOT EXISTS cad_instances (
     id             UUID    PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -241,7 +248,8 @@ CREATE TABLE IF NOT EXISTS cad_instances (
     tz  DOUBLE PRECISION NOT NULL DEFAULT 0.0,
 
     -- 旋转类型（ANGLE=欧拉角，MATRIX=旋转矩阵）
-    rotation_type  rotation_type NOT NULL DEFAULT 'ANGLE',
+    rotation_type  VARCHAR(10) NOT NULL DEFAULT 'ANGLE'
+        CONSTRAINT chk_cad_instance_rotation_type CHECK (rotation_type IN ('ANGLE', 'MATRIX')),
 
     -- ANGLE 模式：欧拉角（弧度，对应 DocDoku CADInstance.rx/ry/rz）
     rx  DOUBLE PRECISION,
