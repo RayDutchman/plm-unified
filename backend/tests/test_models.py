@@ -115,3 +115,44 @@ def test_binary_full_name_unique(db):
     db.add(BinaryResource(full_name="dup/path", content_length=2))
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+def test_usage_link_and_cad_instance_roundtrip(db):
+    from app.models import (
+        PartMaster, PartRevision, PartIteration, PartUsageLink, CADInstance,
+    )
+    ws, u = _make_ws_user(db)
+    parent = PartMaster(workspace_id=ws.id, number="ASM", name="装配", author_id=u.id)
+    child = PartMaster(workspace_id=ws.id, number="CHILD", name="子件", author_id=u.id)
+    db.add_all([parent, child]); db.commit()
+    rev = PartRevision(part_master_id=parent.id, version="A", status="WIP")
+    db.add(rev); db.commit()
+    it = PartIteration(part_revision_id=rev.id, iteration=1, author_id=u.id)
+    db.add(it); db.commit()
+
+    link = PartUsageLink(parent_iteration_id=it.id, component_master_id=child.id,
+                         amount=2.0, unit="ea", optional=False, order=0)
+    db.add(link); db.commit(); db.refresh(link)
+
+    inst = CADInstance(usage_link_id=link.id, tx=0, ty=0, tz=0,
+                       rotation_type="ANGLE", rx=0, ry=0, rz=0, order=0)
+    db.add(inst); db.commit(); db.refresh(inst)
+    assert inst.rotation_type == "ANGLE"
+
+
+def test_cad_instance_rotation_type_check(db):
+    from app.models import (
+        PartMaster, PartRevision, PartIteration, PartUsageLink, CADInstance,
+    )
+    ws, u = _make_ws_user(db)
+    pm = PartMaster(workspace_id=ws.id, number="ASM2", name="a", author_id=u.id)
+    db.add(pm); db.commit()
+    rev = PartRevision(part_master_id=pm.id, version="A", status="WIP"); db.add(rev); db.commit()
+    it = PartIteration(part_revision_id=rev.id, iteration=1, author_id=u.id); db.add(it); db.commit()
+    link = PartUsageLink(parent_iteration_id=it.id, component_master_id=pm.id,
+                         amount=1.0, unit="ea", optional=False, order=0)
+    db.add(link); db.commit()
+    db.add(CADInstance(usage_link_id=link.id, tx=0, ty=0, tz=0,
+                       rotation_type="BOGUS", order=0))
+    with pytest.raises(IntegrityError):
+        db.commit()
