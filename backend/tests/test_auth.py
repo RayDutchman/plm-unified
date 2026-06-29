@@ -80,3 +80,63 @@ def test_token_schema_defaults():
     t = Token(access_token="a")
     assert t.token_type == "bearer"
     assert t.refresh_token is None
+
+
+from fastapi.testclient import TestClient
+
+
+@pytest.fixture
+def client(db):
+    from app.main import app
+    from app.database import get_db
+    _seed_user(db, username="admin", password="admin12345")
+
+    def _override_get_db():
+        yield db
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_login_success_and_me(client):
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["token_type"] == "bearer"
+    token = body["access_token"]
+
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    assert me.json()["username"] == "admin"
+
+
+def test_login_wrong_password_401(client):
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "nope"})
+    assert r.status_code == 401
+
+
+def test_me_without_token_401(client):
+    assert client.get("/api/auth/me").status_code == 401
+
+
+def test_refresh_flow(client):
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    refresh_token = r.json()["refresh_token"]
+    r2 = client.post("/api/auth/refresh", json={"refresh_token": refresh_token})
+    assert r2.status_code == 200
+    assert r2.json()["access_token"]
+
+
+def test_change_password(client):
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    token = r.json()["access_token"]
+    r2 = client.post("/api/auth/change-password",
+                     headers={"Authorization": f"Bearer {token}"},
+                     json={"old_password": "admin12345", "new_password": "newpass123"})
+    assert r2.status_code == 200
+    # 旧密码失效、新密码可登录
+    assert client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"}).status_code == 401
+    assert client.post("/api/auth/token", data={"username": "admin", "password": "newpass123"}).status_code == 200
