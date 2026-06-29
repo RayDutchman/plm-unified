@@ -1,7 +1,7 @@
 """二进制资源与几何体。对应 DocDoku BinaryResource / Geometry。"""
 import uuid
 from sqlalchemy import (
-    Column, String, BigInteger, Integer, Double, Uuid, ForeignKey, DateTime, func,
+    Column, String, BigInteger, Integer, Double, Uuid, ForeignKey, DateTime, Index, func,
 )
 from app.database import Base
 
@@ -19,6 +19,9 @@ class BinaryResource(Base):
 class Geometry(Base):
     """迭代的 LOD 几何体，含包围盒（毫米）。"""
     __tablename__ = "geometries"
+    __table_args__ = (
+        Index("idx_geometries_iteration", "iteration_id"),
+    )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     iteration_id = Column(Uuid(as_uuid=True), ForeignKey("part_iterations.id", ondelete="CASCADE"), nullable=False)

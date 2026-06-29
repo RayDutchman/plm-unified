@@ -2,7 +2,7 @@
 import uuid
 from sqlalchemy import (
     Column, String, Text, Integer, Boolean, Uuid, ForeignKey, DateTime,
-    UniqueConstraint, CheckConstraint, func,
+    UniqueConstraint, CheckConstraint, Index, func,
 )
 from app.database import Base
 from app.models.mixins import TimestampMixin, SoftDeleteMixin
@@ -11,7 +11,11 @@ from app.models.mixins import TimestampMixin, SoftDeleteMixin
 class PartMaster(Base, TimestampMixin, SoftDeleteMixin):
     """零件主数据。workspace_id + number 唯一。"""
     __tablename__ = "part_masters"
-    __table_args__ = (UniqueConstraint("workspace_id", "number", name="uq_part_master_ws_number"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "number", name="uq_part_master_ws_number"),
+        Index("idx_part_masters_workspace", "workspace_id"),
+        Index("idx_part_masters_number", "number"),
+    )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workspace_id = Column(Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=False)
@@ -28,6 +32,9 @@ class PartRevision(Base, TimestampMixin, SoftDeleteMixin):
     __table_args__ = (
         UniqueConstraint("part_master_id", "version", name="uq_part_revision_master_version"),
         CheckConstraint("status IN ('WIP','RELEASED','OBSOLETE')", name="ck_part_revision_status"),
+        Index("idx_part_revisions_master", "part_master_id"),
+        Index("idx_part_revisions_checkout", "checkout_user_id"),
+        Index("idx_part_revisions_status", "status"),
     )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -50,6 +57,7 @@ class PartIteration(Base, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("part_revision_id", "iteration", name="uq_part_iteration_revision_iter"),
         CheckConstraint("iteration > 0", name="ck_part_iteration_positive"),
+        Index("idx_part_iterations_revision", "part_revision_id"),
     )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)

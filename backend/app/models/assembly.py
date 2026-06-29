@@ -1,7 +1,7 @@
 """装配关系。对应 DocDoku PartUsageLink / CADInstance。"""
 import uuid
 from sqlalchemy import (
-    Column, String, Text, Integer, Boolean, Double, Uuid, ForeignKey, CheckConstraint,
+    Column, String, Text, Integer, Boolean, Double, Uuid, ForeignKey, CheckConstraint, Index,
 )
 from app.database import Base
 
@@ -9,6 +9,10 @@ from app.database import Base
 class PartUsageLink(Base):
     """父迭代使用子零件（BOM）。子件引用 part_masters（非具体版本）。"""
     __tablename__ = "part_usage_links"
+    __table_args__ = (
+        Index("idx_part_usage_links_parent", "parent_iteration_id"),
+        Index("idx_part_usage_links_component", "component_master_id"),
+    )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     parent_iteration_id = Column(Uuid(as_uuid=True), ForeignKey("part_iterations.id", ondelete="CASCADE"), nullable=False)
@@ -26,6 +30,7 @@ class CADInstance(Base):
     __tablename__ = "cad_instances"
     __table_args__ = (
         CheckConstraint("rotation_type IN ('ANGLE','MATRIX')", name="ck_cad_instance_rotation_type"),
+        Index("idx_cad_instances_usage_link", "usage_link_id"),
     )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
