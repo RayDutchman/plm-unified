@@ -85,3 +85,33 @@ def test_part_iteration_must_be_positive(db):
     db.add(PartIteration(part_revision_id=rev.id, iteration=0, author_id=u.id))
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+def test_binary_and_geometry_roundtrip(db):
+    from app.models import (
+        PartMaster, PartRevision, PartIteration, BinaryResource, Geometry,
+    )
+    ws, u = _make_ws_user(db)
+    pm = PartMaster(workspace_id=ws.id, number="P-G", name="a", author_id=u.id)
+    db.add(pm); db.commit()
+    rev = PartRevision(part_master_id=pm.id, version="A", status="WIP")
+    db.add(rev); db.commit()
+    it = PartIteration(part_revision_id=rev.id, iteration=1, author_id=u.id)
+    db.add(it); db.commit()
+
+    br = BinaryResource(full_name="w/parts/P-G/A/1/geometries/g.glb",
+                        content_length=1024)
+    db.add(br); db.commit(); db.refresh(br)
+
+    geo = Geometry(iteration_id=it.id, binary_resource_id=br.id, quality=0,
+                   x_min=0.0, y_min=0.0, z_min=0.0, x_max=1.0, y_max=1.0, z_max=1.0)
+    db.add(geo); db.commit(); db.refresh(geo)
+    assert geo.quality == 0
+
+
+def test_binary_full_name_unique(db):
+    from app.models import BinaryResource
+    db.add(BinaryResource(full_name="dup/path", content_length=1)); db.commit()
+    db.add(BinaryResource(full_name="dup/path", content_length=2))
+    with pytest.raises(IntegrityError):
+        db.commit()
