@@ -176,7 +176,7 @@ feat(part-api): 实现签入签出状态机
 | 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 | ✅（见 m1-execution-plan §4.1 review 清单） |
 | 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 | ⬜ |
 | 1.4 | 基于通过的 DDL 写 ORM 模型 + Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 | ✅（9 表 ORM + Alembic 迁移，已合并 `dev_myPDM` @5f8eed6，13 测试通过，alembic check 无漂移） |
-| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 | ⬜（下一步） |
+| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 | ✅（`/api/auth/*` 登录/刷新/me/改密，30 测试通过，含安全审查修复：refresh 令牌不可越权；种子 admin 已合并 `dev_myPDM`） |
 | 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 | ⬜ |
 | 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 | ⬜ |
 | 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 | ⬜ |
@@ -186,7 +186,7 @@ feat(part-api): 实现签入签出状态机
 >
 > ✅ **已协调（1.1 × 1.4 重叠，决议）**：A 的 `feat/m1-ddl`（@167dbae）以裸 `init.sql` 实现 DDL，B 的 1.4 已用 **ORM 模型 + Alembic 迁移**实现同一套 9 表 schema 并合并 `dev_myPDM`。两者在 UUID 生成位置、ENUM vs VARCHAR+CHECK、updated_at 触发器 vs 应用侧、建库机制上均不同。**决议（采纳）：schema 权威实现以 B 的 Alembic 迁移为准（符合执行方案 §3 已定的纯 Alembic 口径）；A 的 `init.sql` PR 不合并，A 的产出转为对 B 迁移/模型的 1.3 业务语义 review；`init.sql` 如保留仅作 `docs/` 参考并标注 non-authoritative。**
 >
-> 进度小结（截至本次更新）：B 侧 1.2/1.4 完成并合并 `dev_myPDM`；A 的 DDL 转入 1.3（对 B 迁移做 DocDoku 语义核对）。待 1.3 通过后，B 启动 1.5（JWT 认证），A 启动 1.6/1.7（CRUD、签入签出，import 冻结的模型）。
+> 进度小结（截至本次更新）：B 侧 **1.2 / 1.4 / 1.5 完成并合并 `dev_myPDM`**（数据地基 + JWT 认证，含安全审查修复）。A 的 DDL 转入 1.3（对 B 迁移做 DocDoku 语义核对）。待 1.3 通过，A 即可启动 1.6/1.7（CRUD、签入签出，import 冻结的模型 + 复用 `get_current_active_user`/`require_role` 依赖）；之后 AB 合写 1.9 验收（种子 `admin/admin12345` 登录串流程）。
 
 **✅ M1 达成条件**：验收测试全部通过——能通过 API 创建零件、签出、修改、签入，签出状态被第二个用户请求时返回 409，数据正确写入新库。
 
