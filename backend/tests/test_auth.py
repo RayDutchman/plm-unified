@@ -140,3 +140,25 @@ def test_change_password(client):
     # 旧密码失效、新密码可登录
     assert client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"}).status_code == 401
     assert client.post("/api/auth/token", data={"username": "admin", "password": "newpass123"}).status_code == 200
+
+
+def test_refresh_token_rejected_at_protected_endpoint(client):
+    # refresh 令牌不得当作 access 令牌访问受保护接口（typ 必须为 access）
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    refresh_token = r.json()["refresh_token"]
+    me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {refresh_token}"})
+    assert me.status_code == 401
+
+
+def test_access_token_rejected_at_refresh(client):
+    # access 令牌不得用于刷新（/refresh 要求 typ=refresh）
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    access_token = r.json()["access_token"]
+    r2 = client.post("/api/auth/refresh", json={"refresh_token": access_token})
+    assert r2.status_code == 401
+
+
+def test_forged_token_rejected_at_me(client):
+    # 伪造/格式错误的令牌经 HTTP 层应 401
+    me = client.get("/api/auth/me", headers={"Authorization": "Bearer not.a.valid.token"})
+    assert me.status_code == 401

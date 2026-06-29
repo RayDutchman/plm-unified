@@ -22,7 +22,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     try:
         payload = decode_token(token)
         username = payload.get("sub")
-        if not username:
+        # 必须是 access 令牌：拒绝用 refresh 令牌（typ=refresh）访问受保护接口，
+        # 否则 7 天有效期的 refresh 令牌会沦为全 API 的长效凭证
+        if not username or payload.get("typ") != "access":
             raise HTTPException(status_code=401, detail="无效的令牌")
     except JWTError:
         raise HTTPException(status_code=401, detail="令牌验证失败")
@@ -34,7 +36,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     if current_user.status != "active":
-        raise HTTPException(status_code=400, detail="账户已被禁用")
+        raise HTTPException(status_code=403, detail="账户已被禁用")
     return current_user
 
 

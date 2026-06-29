@@ -7,6 +7,7 @@ Create Date: 2026-06-29
 """
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0002_seed_admin"
@@ -22,11 +23,17 @@ _ADMIN_HASH = "$2b$12$StQrQwZUxi9mQ1fakoSJpeFOpo0G.UQ8VU8YINxQ2fEe2KlCbJ.7."
 
 
 def upgrade() -> None:
+    # 用绑定参数而非 f-string 拼接，避免 SQL 注入模式扩散
     op.execute(
-        "INSERT INTO users (id, workspace_id, username, password_hash, real_name, role, status, created_at, updated_at) "
-        f"VALUES ('{_ADMIN_ID}', '{_DEFAULT_WS}', 'admin', '{_ADMIN_HASH}', '系统管理员', 'admin', 'active', now(), now())"
+        sa.text(
+            "INSERT INTO users (id, workspace_id, username, password_hash, real_name, role, status, created_at, updated_at) "
+            "VALUES (:id, :ws, :username, :pwd, :real_name, :role, :status, now(), now())"
+        ).bindparams(
+            id=_ADMIN_ID, ws=_DEFAULT_WS, username="admin", pwd=_ADMIN_HASH,
+            real_name="系统管理员", role="admin", status="active",
+        )
     )
 
 
 def downgrade() -> None:
-    op.execute(f"DELETE FROM users WHERE id = '{_ADMIN_ID}'")
+    op.execute(sa.text("DELETE FROM users WHERE id = :id").bindparams(id=_ADMIN_ID))
