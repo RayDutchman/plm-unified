@@ -3,20 +3,19 @@
  *
  * 装配体查看器的 R3F Canvas + 悬浮工具栏。
  *
- * 相机：OrbitControls（替代 ArcballControls），原生支持 camera.up=(0,0,1) Z-up。
- * 光照：方向光跟随相机旋转（DocDoku 头灯方案）。HemiLight 提供环境补光。
+ * 约定：Three.js 默认 Y-up；CAD 数据 (Z-up) 通过根 group rotation 转换为 Y-up。
+ * 这样 ArcballControls 旋转手感正常，场景中的模型方向也正确。
  */
 
 import { Suspense, useEffect, useRef, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { ArcballControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { AssemblyViewer } from './AssemblyViewer';
 import { LODController } from './LODController';
 import { useAssemblyStore } from '../../stores/assemblyStore';
 
 // ========== 背景 ==========
-
 function SceneBackground() {
   const { scene } = useThree();
   useEffect(() => {
@@ -26,13 +25,11 @@ function SceneBackground() {
   return null;
 }
 
-// ========== 头灯（CameraLights）==========
-
+// ========== 头灯 ==========
 function CameraLights() {
   const { camera } = useThree();
   const dir1Ref = useRef<THREE.DirectionalLight>(null);
   const dir2Ref = useRef<THREE.DirectionalLight>(null);
-
   const dir1Local = new THREE.Vector3(0.192, 0.192, 0.961);
   const dir2Local = new THREE.Vector3(-0.440, 0.770, 0.440);
 
@@ -57,42 +54,12 @@ function CameraLights() {
   );
 }
 
-// ========== 首次自动适配 ==========
-
-function AutoFit() {
-  const { camera } = useThree();
-  const instances = useAssemblyStore((s) => s.instances);
-  const fitted = useRef(false);
-
-  useEffect(() => {
-    if (instances.length === 0 || fitted.current) return;
-    fitted.current = true;
-    const box = calcBBox(instances);
-    if (!box) return;
-    const center = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(
-      box.max.x - box.min.x,
-      box.max.y - box.min.y,
-      box.max.z - box.min.z,
-    );
-    const dir = new THREE.Vector3(1, 1, -1).normalize();
-    const dist = Math.max(radius * 2, 1);
-    camera.position.copy(center).addScaledVector(dir, dist);
-    camera.lookAt(center);
-    (camera as THREE.PerspectiveCamera).near = 0.1;
-    (camera as THREE.PerspectiveCamera).far = 50000;
-    camera.updateProjectionMatrix();
-  }, [instances, camera]);
-
-  return null;
-}
-
-// ========== 助手 ==========
-
+// ========== 辅助 ==========
 function calcBBox(instances: ReturnType<typeof useAssemblyStore.getState>['instances']) {
   const box = new THREE.Box3();
+  const toYup = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
   for (const inst of instances) {
-    const mat4 = new THREE.Matrix4().fromArray(inst.matrix);
+    const mat4 = new THREE.Matrix4().fromArray(inst.matrix).premultiply(toYup);
     const localBox = new THREE.Box3(
       new THREE.Vector3(inst.xMin, inst.yMin, inst.zMin),
       new THREE.Vector3(inst.xMax, inst.yMax, inst.zMax),
@@ -102,8 +69,9 @@ function calcBBox(instances: ReturnType<typeof useAssemblyStore.getState>['insta
   return box.isEmpty() ? null : box;
 }
 
-/** rAF 动画辅助：duration 秒，easing(t) ∈ [0,1] */
-function animateCamera(
+const quintic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+function animateCameraView(
   camera: THREE.Camera,
   ctrl: any,
   startPos: THREE.Vector3,
@@ -114,15 +82,15 @@ function animateCamera(
   easing: (t: number) => number,
 ) {
   let elapsed = 0;
-  let lastTime = performance.now();
+  let last = performance.now();
   const loop = () => {
     const now = performance.now();
-    elapsed += (now - lastTime) / 1000;
-    lastTime = now;
+    elapsed += (now - last) / 1000;
+    last = now;
     const t = Math.min(elapsed / duration, 1);
-    const ease = easing(t);
-    camera.position.lerpVectors(startPos, endPos, ease);
-    ctrl.target.lerpVectors(startTgt, endTgt, ease);
+    const e = easing(t);
+    camera.position.lerpVectors(startPos, endPos, e);
+    ctrl.target.lerpVectors(startTgt, endTgt, e);
     camera.lookAt(ctrl.target);
     ctrl.update();
     if (elapsed < duration) requestAnimationFrame(loop);
@@ -130,63 +98,73 @@ function animateCamera(
   requestAnimationFrame(loop);
 }
 
-// ========== 工具栏 ==========
+// ========== 首次自动适配 ==========
+function AutoFit() {
+  const { camera } = useThree();
+  const instances = useAssemblyStore((s) => s.instances);
+  const fitted = useRef(false);
+  useEffect(() => {
+    if (instances.length === 0 || fitted.current) return;
+    fitted.current = true;
+    const box = calcBBox(instances);
+    if (!box) return;
+    const c = box.getCenter(new THREE.Vector3());
+    const r = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
+    const dir = new THREE.Vector3(1, 1, -1).normalize();
+    camera.position.copy(c).addScaledVector(dir, Math.max(r * 2, 1));
+    camera.lookAt(c);
+    (camera as THREE.PerspectiveCamera).near = 0.1;
+    (camera as THREE.PerspectiveCamera).far = 50000;
+    camera.updateProjectionMatrix();
+  }, [instances, camera]);
+  return null;
+}
 
+// ========== 主容器 ==========
 export function AssemblyCanvas() {
   const instances = useAssemblyStore((s) => s.instances);
   const showEdges = useAssemblyStore((s) => s.showEdges);
   const toggleEdges = useAssemblyStore((s) => s.toggleEdges);
+  const selectInstance = useAssemblyStore((s) => s.selectInstance);
   const controlsRef = useRef<any>(null);
 
-  // 根据包围盒计算默认视角方向
-  const getDefaultDirection = useCallback(() => {
-    const box = calcBBox(instances);
-    if (!box) return new THREE.Vector3(1, 1, -1).normalize();
-    return new THREE.Vector3(1, 1, -1).normalize();
-  }, [instances]);
+  const toYup = new THREE.Matrix4().makeRotationX(-Math.PI / 2);
+  const fromYup = new THREE.Matrix4().makeRotationX(Math.PI / 2);
 
-  // 重置（对齐 DocDoku resetCameraPlace）：默认方向 + bbox中心 + 1000ms Linear
+  /** 默认方向（Y-up坐标系下）：前右上 (1,1,-1)归一化 */
+  const defaultDir = useCallback(
+    () => new THREE.Vector3(1, 1, -1).normalize(),
+    [],
+  );
+
   const handleReset = useCallback(() => {
     const ctrl = controlsRef.current;
     if (!ctrl || instances.length === 0) return;
     const box = calcBBox(instances);
-    const center = box ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3(0, 0, 0);
-    const radius = box
-      ? Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z)
-      : 100;
-    const dir = getDefaultDirection();
-    const dist = Math.max(radius * 2, 1);
-    const endPos = center.clone().addScaledVector(dir, dist);
-    const { camera } = (ctrl as any).object
-      ? { camera: (ctrl as any).object as THREE.Camera }
-      : (() => { throw new Error('no camera'); })();
-    const startPos = camera.position.clone();
-    const startTgt = ctrl.target.clone();
-    animateCamera(camera, ctrl, startPos, endPos, startTgt, center, 1.0, (t) => t);
-  }, [instances, getDefaultDirection]);
+    const center = box ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3();
+    const r = box ? Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z) : 100;
+    const dir = defaultDir();
+    const endPos = center.clone().addScaledVector(dir, Math.max(r * 2, 1));
+    const cam = (ctrl as any)._camera as THREE.Camera;
+    const target = (ctrl as any)._gizmoMatrixState as THREE.Vector3;
+    animateCameraView(cam, ctrl, cam.position.clone(), endPos, target.clone(), center, 1.0, (t) => t);
+  }, [instances, defaultDir]);
 
-  // 适配（对齐 DocDoku bestFitView/vizFit）：保持方向 + bbox中心 + 1000ms Quintic
   const handleFit = useCallback(() => {
-    const ctrlObj = controlsRef.current;
-    if (!ctrlObj || instances.length === 0) return;
+    const ctrl = controlsRef.current;
+    if (!ctrl || instances.length === 0) return;
     const box = calcBBox(instances);
     if (!box) return;
     const center = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
-    const { camera } = (ctrlObj as any).object
-      ? { camera: (ctrlObj as any).object as THREE.Camera }
-      : (() => { throw new Error('no camera'); })();
-    const ctrl = ctrlObj;
-    const dir = center.clone().sub(camera.position).normalize();
-    if (dir.lengthSq() < 0.001) dir.set(1, 1, -1).normalize();
-    const dist = Math.max(radius * 2, 1);
-    const endPos = center.clone().addScaledVector(dir, -dist);
-    const startPos = camera.position.clone();
-    const startTgt = ctrl.target.clone();
-    animateCamera(camera, ctrl, startPos, endPos, startTgt, center, 1.0, (t) => 1 - Math.pow(1 - t, 3));
-  }, [instances]);
+    const r = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
+    const cam = (ctrl as any)._camera as THREE.Camera;
+    const target = (ctrl as any)._gizmoMatrixState as THREE.Vector3;
+    const dir = center.clone().sub(cam.position).normalize();
+    if (dir.lengthSq() < 0.001) dir.copy(defaultDir());
+    const endPos = center.clone().addScaledVector(dir, -Math.max(r * 2, 1));
+    animateCameraView(cam, ctrl, cam.position.clone(), endPos, target.clone(), center, 1.0, quintic);
+  }, [instances, defaultDir]);
 
-  // 截图
   const handleScreenshot = () => {
     const canvas = document.querySelector('canvas');
     if (!canvas) return;
@@ -198,8 +176,6 @@ export function AssemblyCanvas() {
     a.click();
   };
 
-  // Escape 取消选中
-  const selectInstance = useAssemblyStore((s) => s.selectInstance);
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') selectInstance(null);
@@ -214,43 +190,32 @@ export function AssemblyCanvas() {
         <button onClick={handleFit} title="最佳适配视图" style={btnStyle}>⊡ 适配</button>
         <button onClick={handleReset} title="重置视角" style={btnStyle}>⌂ 重置</button>
         <button onClick={handleScreenshot} title="截图" style={btnStyle}>📷 截图</button>
-        <button
-          onClick={toggleEdges}
-          title="边线开关"
-          style={{ ...btnStyle, color: showEdges ? '#93c5fd' : '#6b7280' }}
-        >◫ 边线</button>
-        <span style={{ color: '#9ca3af', fontSize: 12, marginLeft: 4 }}>
-          {instances.length} 个实例
-        </span>
+        <button onClick={toggleEdges} title="边线开关" style={{ ...btnStyle, color: showEdges ? '#93c5fd' : '#6b7280' }}>◫ 边线</button>
+        <span style={{ color: '#9ca3af', fontSize: 12, marginLeft: 4 }}>{instances.length} 个实例</span>
       </div>
 
       <Canvas
-        camera={{ position: [-1000, -1000, 1000], fov: 45, near: 0.1, far: 50000, up: [0, 0, 1] }}
+        camera={{ position: [-1000, -1000, 1000], fov: 45, near: 0.1, far: 50000 }}
         style={{ width: '100%', height: '100%' }}
         gl={{ preserveDrawingBuffer: true, powerPreference: 'high-performance', antialias: true, stencil: false }}
       >
         <SceneBackground />
         <hemisphereLight
           args={[new THREE.Color().setHSL(0.6, 0.5, 0.5).getHex(), new THREE.Color().setHSL(0.095, 0.5, 0.4).getHex(), 0.3]}
-          position={[0, 0, 500]}
+          position={[0, 500, 0]}
         />
         <CameraLights />
 
         <Suspense fallback={null}>
           <LODController />
-          <AssemblyViewer />
+          {/* Z-up (CAD) → Y-up (Three.js)：根 group 绕 X 轴旋转 -90° */}
+          <group rotation={[-Math.PI / 2, 0, 0]}>
+            <AssemblyViewer />
+          </group>
         </Suspense>
 
         <AutoFit />
-
-        {/* OrbitControls 替代 ArcballControls：原生支持 Z-up */}
-        <OrbitControls
-          ref={controlsRef}
-          makeDefault
-          rotateSpeed={1.0}
-          zoomSpeed={1.2}
-          panSpeed={0.3}
-        />
+        <ArcballControls ref={controlsRef} makeDefault />
       </Canvas>
     </div>
   );
