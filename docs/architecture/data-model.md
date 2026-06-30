@@ -1,7 +1,7 @@
 # PLM Unified 数据库模型参考
 
 > 最后更新：2026-06-30  
-> 表总数：49 张业务表 + 1 张 alembic_version
+> 表总数：50 张业务表 + 1 张 alembic_version
 
 ---
 
@@ -210,18 +210,18 @@ CAD 转换任务状态。
 | updated_at | timestamptz | NOT NULL | |
 
 ### document_links
-文档↔实体关联（替代旧 JSONB document_links 字段）。
+文档↔实体关联（替代旧 JSONB document_links 字段）。entity_type 取值：`part`（PartMaster 零部件）、`configuration_item`、`eco`。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | uuid | PK | |
 | document_id | uuid | FK→documents CASCADE, NOT NULL | |
-| entity_type | varchar(32) | NOT NULL | part/configuration_item/eco |
-| entity_id | uuid | NOT NULL | |
+| entity_type | varchar(32) | NOT NULL | part / configuration_item / eco |
+| entity_id | uuid | NOT NULL | 实体主键（如 part_masters.id） |
 | created_at | timestamptz | NOT NULL | |
 
 ### document_group_links
-文档可见用户组。
+文档可见用户组（复合主键）。
 
 | 字段 | 类型 | 约束 |
 |------|------|------|
@@ -643,13 +643,13 @@ ECO 执行明细。5 种动作：upgrade/release/freeze/revert/publish。
 | created_at | timestamptz | | |
 
 ### component_attachments
-零件附件（兼容旧 myPDM components 表）。
+零件附件（CAD附件 / 生产附件），已迁移至 PartMaster。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | uuid | PK | |
-| component_id | uuid | FK→components, NOT NULL | |
-| category | varchar(32) | NOT NULL | cad/production |
+| part_master_id | uuid | FK→part_masters CASCADE, NOT NULL | 所属零部件 |
+| category | varchar(32) | NOT NULL | cad / production |
 | file_name | varchar(255) | | |
 | file_size | integer | | |
 | file_path | varchar(512) | | |
@@ -657,7 +657,7 @@ ECO 执行明细。5 种动作：upgrade/release/freeze/revert/publish。
 | created_at | timestamptz | | |
 
 ### components
-旧 myPDM 零件表（兼容保留）。
+旧 myPDM 零件表（兼容保留，已由 part_masters 替代）。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -684,7 +684,8 @@ workspaces ──┬── users ───── user_group_members ────
              │
              ├── part_masters ── document_links ── documents ── document_attachments
              │       │                                    └── document_group_links → user_groups
-             │       ├── component_attachments
+              │       ├── component_attachments (part_master_id → part_masters)
+              │       ├── custom_field_values (entity_type='part' + entity_id → part_masters)
              │       ├── part_revisions
              │       │       ├── part_iterations
              │       │       │       ├── part_usage_links ──── cad_instances
@@ -704,9 +705,15 @@ workspaces ──┬── users ───── user_group_members ────
              │              └── inventory_documents ── document_lines / review / log
              │
              ├── projects ── project_members / project_tasks
-             │                    ├── project_task_links
-             │                    ├── project_task_comments
-             │                    └── project_task_deps (predecessor/successor)
-             │
-             └── operation_logs
+              │                    ├── project_task_links
+              │                    ├── project_task_comments
+              │                    └── project_task_deps (predecessor/successor)
+              │
+              ├── custom_field_definitions ── custom_field_values (entity_type + entity_id)
+              │
+              ├── user_dashboards ── dashboard_folders
+              │       ├── dashboard_items (entity_type + entity_id)
+              │       └── dashboard_folder_shares → users
+              │
+              └── operation_logs
 ```
