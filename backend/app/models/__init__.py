@@ -19,7 +19,7 @@ from app.models.models_configuration import (
 )
 from app.models.models_log import OperationLog
 from app.models.models_project import (
-    Project, ProjectMember, ProjectTask, ProjectTaskLink, ProjectTaskComment, ProjectTaskDep,
+    Project, ProjectMember, ProjectTask, ProjectTaskLink, ProjectTaskComment, ProjectTaskDep, ProjectTaskWorklog,
 )
 from app.models.models_dashboard import (
     UserDashboard, DashboardFolder, DashboardItem, DashboardFolderShare,
@@ -42,7 +42,7 @@ __all__ = [
     "ConfigurationProfile", "ConfigurationProfileItem", "ConfigurationWorkingItem",
     "ConfigurationReviewRecord", "ConfigurationStatusLog",
     "OperationLog",
-    "Project", "ProjectMember", "ProjectTask", "ProjectTaskLink", "ProjectTaskComment", "ProjectTaskDep",
+    "Project", "ProjectMember", "ProjectTask", "ProjectTaskLink", "ProjectTaskComment", "ProjectTaskDep", "ProjectTaskWorklog",
     "CustomFieldDefinition", "CustomFieldValue",
     "UserDashboard", "DashboardFolder", "DashboardItem", "DashboardFolderShare",
 ]
