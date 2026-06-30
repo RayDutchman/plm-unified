@@ -15,7 +15,5 @@ const emptyPage = { items: [], total: 0 };
 export const shellRoutes: MockRoute[] = [
   { method: 'get', pattern: /^\/parts\/$/, handler: () => emptyPage },
   { method: 'get', pattern: /^\/assemblies\/$/, handler: () => emptyPage },
-  { method: 'get', pattern: /^\/documents\/$/, handler: () => emptyPage },
-  { method: 'get', pattern: /^\/custom-fields\/definitions\/$/, handler: () => [] },
   { method: 'get', pattern: /^\/users\/$/, handler: () => ({ items: sampleUsers, total: sampleUsers.length }) },
 ];
