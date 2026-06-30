@@ -1,7 +1,8 @@
-"""二进制资源与几何体。对应 DocDoku BinaryResource / Geometry。"""
+"""二进制资源与几何体。对应 DocDoku BinaryResource / Geometry / Conversion。"""
 import uuid
 from sqlalchemy import (
-    Column, String, BigInteger, Integer, Double, Uuid, ForeignKey, DateTime, Index, func,
+    Column, String, BigInteger, Integer, Double, Uuid, ForeignKey,
+    DateTime, Boolean, Index, func,
 )
 from app.database import Base
 
@@ -33,3 +34,24 @@ class Geometry(Base):
     x_max = Column(Double, nullable=False)
     y_max = Column(Double, nullable=False)
     z_max = Column(Double, nullable=False)
+
+
+class Conversion(Base):
+    """
+    CAD 文件转换任务状态。对应 DocDoku Conversion。
+    每个迭代最多有一条 pending 记录，conversion 服务回调时更新状态。
+    """
+    __tablename__ = "conversions"
+    __table_args__ = (
+        Index("idx_conversions_iteration", "iteration_id"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # 关联的迭代
+    iteration_id = Column(Uuid(as_uuid=True), ForeignKey("part_iterations.id", ondelete="CASCADE"), nullable=False)
+    # 转换状态
+    pending = Column(Boolean, nullable=False, default=True)   # True=转换中
+    succeed = Column(Boolean, nullable=True)                   # None=未完成，True=成功，False=失败
+    # 时间戳
+    start_date = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=True)

@@ -1,4 +1,4 @@
-"""零件迭代相关 API 路由（M2 Phase A）。
+"""零件迭代相关 API 路由（M2 Phase A + B）。
 
 端点：
   PUT  /api/parts/{number}/{version}/iterations/{iteration}
@@ -6,15 +6,32 @@
 
   GET  /api/parts/{number}/{version}/instances
        零件级快速预览：递归装配树，返回所有叶子零件的全局 mat4
+
+  PUT  /api/parts/{number}/{version}/iterations/{iteration}/nativecad
+       上传原生 CAD 文件（写入 vault），自动触发 Kafka 转换消息
+
+  PUT  /api/parts/{number}/{version}/iterations/{iteration}/conversion
+       conversion 服务回调（写入 geometry + 更新转换状态）
+
+  GET  /api/parts/{number}/{version}/iterations/{iteration}/conversion
+       查询转换状态（pending / succeed / startDate / endDate）
 """
 from __future__ import annotations
 
 import uuid
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, File, Query, Request, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.crud.assembly import compute_instances, write_components
+from app.crud.conversion import (
+    get_conversion_status,
+    handle_conversion_callback,
+    publish_conversion_order,
+    save_native_cad_file,
+)
 from app.database import get_db
 from app.models import User
 from app.routers.auth import get_current_active_user
@@ -127,4 +144,158 @@ def get_part_instances(
         root_version=version,
         workspace_id=workspace_id,
         config_spec=config_spec,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 2.5 CAD 文件上传
+# ---------------------------------------------------------------------------
+
+@router.put(
+    "/{number}/{version}/iterations/{iteration}/nativecad",
+    summary="上传原生 CAD 文件（触发转换）",
+)
+async def upload_native_cad(
+    number: str,
+    version: str,
+    iteration: int,
+    file: UploadFile = File(..., description="原生 CAD 文件（.stp/.step/.igs 等）"),
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    workspace_name: str = Query(..., description="工作空间名称（用于 vault 路径）"),
+    request: Request = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    上传原生 CAD 文件到 vault，并向 Kafka CONVERT topic 发送转换任务。
+
+    - 迭代必须处于签出状态且签出用户为当前用户
+    - vault 路径：{workspace}/parts/{number}/{version}/{iter}/nativecad/{filename}
+    - 上传后自动触发异步转换，通过 GET .../conversion 轮询状态
+    """
+    br = await save_native_cad_file(
+        db=db,
+        number=number,
+        version=version,
+        iteration_number=iteration,
+        workspace_id=workspace_id,
+        workspace_name=workspace_name,
+        current_user_id=current_user.id,
+        file=file,
+    )
+
+    # 获取当前用户的 JWT token 传给 conversion 服务（用于回调鉴权）
+    auth_header = request.headers.get("Authorization", "") if request else ""
+    user_token = auth_header.replace("Bearer ", "").strip()
+
+    # 发 Kafka 消息（fire-and-forget，失败不影响上传本身）
+    try:
+        await publish_conversion_order(
+            workspace_name=workspace_name,
+            number=number,
+            version=version,
+            iteration_number=iteration,
+            full_name=br.full_name,
+            file_size=br.content_length,
+            user_token=user_token,
+        )
+    except Exception:
+        # Kafka 不可用时不阻塞文件上传，conversion 可手动重试
+        pass
+
+    return {
+        "fullName": br.full_name,
+        "contentLength": br.content_length,
+        "message": "文件上传成功，已发送转换任务",
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2.7 转换回调（conversion 服务调用）
+# ---------------------------------------------------------------------------
+
+class ConversionCallbackBody(BaseModel):
+    """conversion 服务回调请求体。"""
+    succeed: bool
+    geometry_full_name: Optional[str] = None
+    x_min: Optional[float] = None
+    y_min: Optional[float] = None
+    z_min: Optional[float] = None
+    x_max: Optional[float] = None
+    y_max: Optional[float] = None
+    z_max: Optional[float] = None
+    quality: int = 0
+    content_length: int = 0
+
+
+@router.put(
+    "/{number}/{version}/iterations/{iteration}/conversion",
+    summary="转换服务回调（写入 geometry + 更新状态）",
+)
+def conversion_callback(
+    number: str,
+    version: str,
+    iteration: int,
+    body: ConversionCallbackBody,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    由 conversion 容器在转换完成后调用。
+
+    - succeed=true：写入 BinaryResource + Geometry 记录
+    - succeed=false：仅更新 Conversion 状态为失败
+    - 对应 DocDoku ConverterBean.handleConversionResultCallback()
+    """
+    conversion = handle_conversion_callback(
+        db=db,
+        number=number,
+        version=version,
+        iteration_number=iteration,
+        workspace_id=workspace_id,
+        succeed=body.succeed,
+        geometry_full_name=body.geometry_full_name,
+        x_min=body.x_min, y_min=body.y_min, z_min=body.z_min,
+        x_max=body.x_max, y_max=body.y_max, z_max=body.z_max,
+        quality=body.quality,
+        content_length=body.content_length,
+    )
+    return {
+        "pending": conversion.pending,
+        "succeed": conversion.succeed,
+        "message": "转换结果已记录",
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2.8 转换状态查询
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{number}/{version}/iterations/{iteration}/conversion",
+    summary="查询 CAD 转换状态",
+)
+def get_conversion(
+    number: str,
+    version: str,
+    iteration: int,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    查询迭代的 CAD 文件转换状态。
+
+    返回：{pending, succeed, startDate, endDate}
+    - pending=true：转换进行中，请继续轮询
+    - pending=false, succeed=true：转换成功，可签入
+    - pending=false, succeed=false：转换失败，可重试上传
+    """
+    return get_conversion_status(
+        db=db,
+        number=number,
+        version=version,
+        iteration_number=iteration,
+        workspace_id=workspace_id,
     )
