@@ -168,19 +168,25 @@ feat(part-api): 实现签入签出状态机
 
 ### M1：新 Schema + 认证 + 基础零件 API
 
-**M0 完成后启动。**
+**M0 完成后启动。** 详细执行方案见 [`m1-execution-plan.md`](./m1-execution-plan.md)。
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 1.1 | 设计新数据库 DDL（`part_masters`、`part_revisions`、`part_iterations`、`part_usage_links`、`cad_instances`、`geometries`、`binary_resources` 核心表） | **A 主写** | 串行起点 |
-| 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 |
-| 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 |
-| 1.4 | 基于通过的 DDL 写 Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 |
-| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 |
-| 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 |
-| 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 |
-| 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 |
-| 1.9 | 写 M1 验收测试脚本（pytest，覆盖创建零件→签出→签入流程） | AB | → 1.7 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 1.1 | 设计新数据库 DDL（`part_masters`、`part_revisions`、`part_iterations`、`part_usage_links`、`cad_instances`、`geometries`、`binary_resources` 核心表） | **A 主写** | 串行起点 | ✅（设计见 data-model.md；schema **权威实现以 B 的 Alembic 迁移为准**，A 的 `init.sql` 转为 1.3 语义 review，见下方协调说明） |
+| 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 | ✅（见 m1-execution-plan §4.1 review 清单） |
+| 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 | ✅（DocDoku 三层模型语义对齐；接受 B 建议：users 字段改 myPDM 风格、ENUM 改 VARCHAR+CHECK、bbox/author_id NOT NULL；init.sql 降级为参考脚本，Alembic 为权威） |
+| 1.4 | 基于通过的 DDL 写 ORM 模型 + Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 | ✅（9 表 ORM + Alembic 迁移，已合并 `feat/m1-part-crud`，13 测试通过，alembic check 无漂移） |
+| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 | ✅（`/api/auth/*` 登录/刷新/me/改密，含安全审查修复：refresh 令牌不可越权；种子 admin 迁移，已合并 `feat/m1-part-crud`） |
+| 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 | ✅（`POST/GET /api/parts`；创建三层原子事务，创建者自动签出；分页、软删除过滤；62 测试通过） |
+| 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 | ✅（`PUT checkout/checkin/undocheckout`；行锁防并发；checkin 冻结迭代+生成下一迭代；undocheckout 删草稿） |
+| 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 | ✅（review 4 条全通过，发现并修复 GET 端点缺认证 + checkin 防御缺失；schema 补 camelCase alias + Field 验证；rest-api.md 补 M1 接口文档） |
+| 1.9 | 写 M1 验收测试脚本（pytest，覆盖创建零件→签出→签入流程） | AB | → 1.7 | ✅（`test_m1_acceptance.py`，15 用例，TestClient 全链路 HTTP + DB 校验，62/62 通过；本地手动验证：Alembic 迁移 PostgreSQL 成功，`/api/docs` Swagger 正常渲染，并发签出 409 验证通过） |
+
+> 分工微调（已与执行方案对齐）：1.4 由 B 同时承担 **SQLAlchemy ORM 模型**编写（原计划未指定归属），Alembic 用 `--autogenerate` 从模型生成。模型合并即"冻结"，A 据此启动 1.6/1.7。
+>
+> ✅ **已协调（1.1 × 1.4 重叠，决议）**：A 的 `feat/m1-ddl`（@167dbae）以裸 `init.sql` 实现 DDL，B 的 1.4 已用 **ORM 模型 + Alembic 迁移**实现同一套 9 表 schema。**决议（采纳）：schema 权威实现以 B 的 Alembic 迁移为准；A 的 `init.sql` 转为 1.3 业务语义 review 产出，降级为参考脚本（non-authoritative）。**
+>
+> ✅ **M1 全部完成（截至 feat/m1-part-crud）**：1.3 A 业务语义 review 通过并对齐 ORM；1.4/1.5 B 的 ORM + 认证已合并；1.6/1.7 A 实现 CRUD + 签入签出状态机；1.8 schema/文档/review 补齐；1.9 验收测试 62/62 通过，本地 PostgreSQL 验证成功。待 PR `feat/m1-part-crud` → `dev` → `main` 走完 review 流程后正式关闭 M1。
 
 **✅ M1 达成条件**：验收测试全部通过——能通过 API 创建零件、签出、修改、签入，签出状态被第二个用户请求时返回 409，数据正确写入新库。
 

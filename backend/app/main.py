@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routers import auth
+from app.routers.parts import router as parts_router
+
 app = FastAPI(
     title="PLM Unified API",
     version="0.1.0",
@@ -18,6 +21,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 路由挂载（统一 /api 前缀）
+app.include_router(auth.router, prefix="/api")
+app.include_router(parts_router)
 
 
 @app.get("/health", tags=["系统"])
