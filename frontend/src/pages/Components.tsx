@@ -7,6 +7,7 @@ import { Modal, ConfirmModal } from '../components/Modal';
 import AssemblyDetailContent from '../components/AssemblyDetailContent';
 import PartDetailContent from '../components/PartDetailContent';
 import BOMTraceModal from '../components/BOMTraceModal';
+import BOMTreeTable from '../components/BOMTreeTable';
 import VersionHistory from '../components/VersionHistory';
 import VersionSelectModal from '../components/VersionSelectModal';
 import AssemblyPartPicker from '../components/AssemblyPartPicker';
@@ -15,6 +16,7 @@ import EntityDocumentSection from '../components/EntityDocumentSection';
 import ComponentAttachmentBucket from '../components/ComponentAttachmentBucket';
 import { useDataStore } from '../stores/data';
 import { useTableSort } from '../hooks/useTableSort';
+import { formatDateTime } from '../utils/date';
 import {
   exportAssembliesToFolder,
   exportSingleAssemblyBOM,
@@ -206,7 +208,7 @@ export default function Components() {
   const [viewingAssembly, setViewingAssembly] = useState<Assembly | null>(null);
   const [viewingCustomDefs, setViewingCustomDefs] = useState<CustomFieldDefinition[]>([]);
   const [viewingCustomValues, setViewingCustomValues] = useState<Record<string, unknown>>({});
-  const [detailTab, setDetailTab] = useState<'detail' | 'versions'>('detail');
+  const [detailTab, setDetailTab] = useState<'basic' | 'docs' | 'attachments' | 'bom' | 'versions'>('basic');
   // 子项点击 → 嵌套详情弹窗
   const [nestedEntity, setNestedEntity] = useState<{ type: 'part' | 'assembly'; id: string } | null>(null);
   const [nestedData, setNestedData] = useState<any>(null);
@@ -735,7 +737,7 @@ export default function Components() {
 
   const handleView = async (assembly: Assembly) => {
     setViewingAssembly(assembly);
-    setDetailTab('detail');
+    setDetailTab('basic');
     setExpandedIds(new Set());
     const allDefs = useDataStore.getState().customFieldDefs;
     setViewingCustomDefs(allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('component')));
@@ -1345,24 +1347,22 @@ export default function Components() {
             <EntityDocumentSection entityType="component" entityId={editingAssembly.id} entityCode={editingAssembly.code} entityName={editingAssembly.name} editable />
           )}
 
-          {/* CAD附件 */}
+          {/* CAD附件 / 生产附件（仅编辑已有部件时显示） */}
           {editingAssembly && (
-            <ComponentAttachmentBucket
-              componentId={editingAssembly.id}
-              category="cad"
-              label="CAD附件"
-              editable={true}
-            />
-          )}
-
-          {/* 生产附件 */}
-          {editingAssembly && (
-            <ComponentAttachmentBucket
-              componentId={editingAssembly.id}
-              category="production"
-              label="生产附件"
-              editable={true}
-            />
+            <>
+              <ComponentAttachmentBucket
+                componentId={editingAssembly.id}
+                category="cad"
+                label="CAD附件"
+                editable={true}
+              />
+              <ComponentAttachmentBucket
+                componentId={editingAssembly.id}
+                category="production"
+                label="生产附件"
+                editable={true}
+              />
+            </>
           )}
 
           {/* 子项清单（仅编辑时显示） */}
@@ -1487,15 +1487,53 @@ export default function Components() {
           <div className="max-h-[70vh] overflow-y-auto pr-1">
             <div className="flex gap-1 mb-4 border-b">
               <button
-                onClick={() => setDetailTab('detail')}
+                onClick={() => setDetailTab('basic')}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  detailTab === 'detail'
+                  detailTab === 'basic'
                     ? 'border-primary-600 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                基本信息
+                基础信息
               </button>
+
+              {((viewingAssembly as any)?.document_links?.length > 0) && (
+                <button
+                  onClick={() => setDetailTab('docs')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    detailTab === 'docs'
+                      ? 'border-primary-600 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  关联图文档
+                </button>
+              )}
+
+              <button
+                onClick={() => setDetailTab('attachments')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  detailTab === 'attachments'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                附件
+              </button>
+
+              {viewParts.length > 0 && (
+                <button
+                  onClick={() => setDetailTab('bom')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                    detailTab === 'bom'
+                      ? 'border-primary-600 text-primary-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  子项清单
+                </button>
+              )}
+
               <button
                 onClick={() => setDetailTab('versions')}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -1508,14 +1546,104 @@ export default function Components() {
               </button>
             </div>
 
-            {detailTab === 'detail' ? (
-              <AssemblyDetailContent
-                assembly={viewingAssembly}
-                customFieldDefs={viewingCustomDefs}
-                customFieldValues={viewingCustomValues}
-                onSubItemClick={(item) => handleNestedView(item.childType === 'part' ? 'part' : 'assembly', item.child_id)}
+            {detailTab === 'basic' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">件号</div>
+                    <div className="text-sm text-gray-900 font-medium">{viewingAssembly.code}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">中文名称</div>
+                    <div className="text-sm text-gray-900 font-medium">{viewingAssembly.name}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">版本</div>
+                    <div className="text-sm text-gray-900 font-medium">{viewingAssembly.version || '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">状态</div>
+                    <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${statusTag(viewingAssembly.status).cls}`}>{statusTag(viewingAssembly.status).label}</span>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">规格型号</div>
+                    <div className="text-sm text-gray-900 font-medium whitespace-pre-wrap">{viewingAssembly.spec || '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">备注</div>
+                    <div className="text-sm text-gray-900 font-medium whitespace-pre-wrap">{viewingAssembly.remark || '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">创建人</div>
+                    <div className="text-sm text-gray-900 font-medium">{(viewingAssembly as any).creator_name || '-'}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">创建时间</div>
+                    <div className="text-sm text-gray-900 font-medium">{formatDateTime(viewingAssembly.created_at)}</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <div className="text-xs text-gray-500 mb-0.5">更新时间</div>
+                    <div className="text-sm text-gray-900 font-medium">{formatDateTime(viewingAssembly.updated_at)}</div>
+                  </div>
+                </div>
+
+                {viewingCustomDefs.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {viewingCustomDefs.map(def => (
+                        <div key={def.id} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                          <div className="text-xs text-gray-500 mb-0.5">{def.name}</div>
+                          <div className="text-sm text-gray-900 font-medium whitespace-pre-wrap">
+                            {String(
+                              def.field_type === 'select'
+                                ? (def.options || []).find(o => o === viewingCustomValues[def.id]) || viewingCustomValues[def.id] || '-'
+                                : viewingCustomValues[def.id] ?? '-'
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {detailTab === 'docs' && (
+              <EntityDocumentSection
+                entityType="component"
+                entityId={viewingAssembly.id}
+                entityCode={viewingAssembly.code}
+                entityName={viewingAssembly.name}
+                editable={false}
               />
-            ) : (
+            )}
+
+            {detailTab === 'attachments' && (
+              <div className="space-y-4">
+                <ComponentAttachmentBucket
+                  componentId={viewingAssembly.id}
+                  category="cad"
+                  label="CAD附件"
+                  hideWhenEmpty={true}
+                />
+                <ComponentAttachmentBucket
+                  componentId={viewingAssembly.id}
+                  category="production"
+                  label="生产附件"
+                  hideWhenEmpty={true}
+                />
+              </div>
+            )}
+
+            {detailTab === 'bom' && (
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-bold text-gray-700 mb-2">子项清单</h4>
+                <BOMTreeTable assemblyId={viewingAssembly.id} onRowClick={(item) => handleNestedView(item.childType === 'part' ? 'part' : 'assembly', item.child_id)} />
+              </div>
+            )}
+
+            {detailTab === 'versions' && (
               <VersionHistory
                 entityType="assembly"
                 entityId={viewingAssembly.id}
@@ -1529,31 +1657,6 @@ export default function Components() {
                 }}
               />
             )}
-
-            {/* 关联图文档 */}
-            <EntityDocumentSection
-              entityType="component"
-              entityId={viewingAssembly.id}
-              entityCode={viewingAssembly.code}
-              entityName={viewingAssembly.name}
-              editable={false}
-            />
-
-            {/* CAD附件 */}
-            <ComponentAttachmentBucket
-              componentId={viewingAssembly.id}
-              category="cad"
-              label="CAD附件"
-              hideWhenEmpty={true}
-            />
-
-            {/* 生产附件 */}
-            <ComponentAttachmentBucket
-              componentId={viewingAssembly.id}
-              category="production"
-              label="生产附件"
-              hideWhenEmpty={true}
-            />
           </div>
         )}
       </Modal>
