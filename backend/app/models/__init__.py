@@ -21,6 +21,9 @@ from app.models.models_log import OperationLog
 from app.models.models_project import (
     Project, ProjectMember, ProjectTask, ProjectTaskLink, ProjectTaskComment, ProjectTaskDep,
 )
+from app.models.models_dashboard import (
+    UserDashboard, DashboardFolder, DashboardItem, DashboardFolderShare,
+)
 from app.models.models_custom_field import CustomFieldDefinition, CustomFieldValue
 
 __all__ = [
@@ -41,4 +44,5 @@ __all__ = [
     "OperationLog",
     "Project", "ProjectMember", "ProjectTask", "ProjectTaskLink", "ProjectTaskComment", "ProjectTaskDep",
     "CustomFieldDefinition", "CustomFieldValue",
+    "UserDashboard", "DashboardFolder", "DashboardItem", "DashboardFolderShare",
 ]

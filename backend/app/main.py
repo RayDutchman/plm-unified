@@ -59,10 +59,10 @@ from app.routers.projects import router as projects_router
 app.include_router(projects_router, prefix="/api")
 
 # Phase 5: 支撑层
-# from app.routers.dashboard import router as dashboard_router
-# app.include_router(dashboard_router, prefix="/api")
-# from app.routers.custom_fields import router as custom_fields_router
-# app.include_router(custom_fields_router, prefix="/api")
+from app.routers.dashboard import router as dashboard_router
+app.include_router(dashboard_router, prefix="/api")
+from app.routers.custom_fields import router as custom_fields_router
+app.include_router(custom_fields_router, prefix="/api")
 from app.routers.logs import router as logs_router
 app.include_router(logs_router, prefix="/api")
 from app.routers.admin import router as admin_router
