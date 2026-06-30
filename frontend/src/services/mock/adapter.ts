@@ -2,7 +2,7 @@ import type { AxiosAdapter, AxiosResponse, InternalAxiosRequestConfig } from 'ax
 import { AxiosError } from 'axios';
 import { routes } from './routes';
 
-const DELAY = 100; // 模拟网络延迟（ms）
+const DELAY = 0; // mock 即时返回（避免轮询场景下迟迟无法 network-idle）
 
 function parseBody(data: unknown): any {
   if (data == null) return undefined;

@@ -18,6 +18,8 @@ frontend/.env.local
 .env
 .env.*
 !.env.example
+# 前端 mock 开关（非密钥，需入库供团队默认启用前端独立运行）
+!frontend/.env.development
 
 # Docker
 docker/data/
