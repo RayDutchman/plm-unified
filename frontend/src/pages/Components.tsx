@@ -13,7 +13,7 @@ import VersionSelectModal from '../components/VersionSelectModal';
 import AssemblyPartPicker from '../components/AssemblyPartPicker';
 import EntityEditModal from '../components/EntityEditModal';
 import EntityDocumentSection from '../components/EntityDocumentSection';
-import ComponentAttachmentBucket from '../components/ComponentAttachmentBucket';
+import PartAttachmentBucket from '../components/PartAttachmentBucket';
 import { useDataStore } from '../stores/data';
 import { useTableSort } from '../hooks/useTableSort';
 import { formatDateTime } from '../utils/date';
@@ -1350,14 +1350,14 @@ export default function Components() {
           {/* CAD附件 / 生产附件（仅编辑已有部件时显示） */}
           {editingAssembly && (
             <>
-              <ComponentAttachmentBucket
-                componentId={editingAssembly.id}
+              <PartAttachmentBucket
+                partId={editingAssembly.id}
                 category="cad"
                 label="CAD附件"
                 editable={true}
               />
-              <ComponentAttachmentBucket
-                componentId={editingAssembly.id}
+              <PartAttachmentBucket
+                partId={editingAssembly.id}
                 category="production"
                 label="生产附件"
                 editable={true}
@@ -1617,14 +1617,14 @@ export default function Components() {
 
             {detailTab === 'attachments' && (
               <div className="space-y-4">
-                <ComponentAttachmentBucket
-                  componentId={viewingAssembly.id}
+                <PartAttachmentBucket
+                  partId={viewingAssembly.id}
                   category="cad"
                   label="CAD附件"
                   hideWhenEmpty={true}
                 />
-                <ComponentAttachmentBucket
-                  componentId={viewingAssembly.id}
+                <PartAttachmentBucket
+                  partId={viewingAssembly.id}
                   category="production"
                   label="生产附件"
                   hideWhenEmpty={true}

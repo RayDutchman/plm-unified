@@ -6,8 +6,8 @@ from sqlalchemy.sql import func
 from app.database import Base
 
 
-class ComponentAttachment(Base):
-    __tablename__ = "component_attachments"
+class PartAttachment(Base):
+    __tablename__ = "part_attachments"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     part_master_id = Column(UUID(as_uuid=True), ForeignKey("part_masters.id", ondelete="CASCADE"), nullable=False)

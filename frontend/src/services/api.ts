@@ -261,17 +261,17 @@ export const attachmentApi = {
 };
 
 // 部件附件 API
-export type ComponentAttachment = {
+export type PartAttachment = {
   id: string;
   file_name: string;
   file_size: number;
 };
 
-export const componentAttachmentsApi = {
-  list: (componentId: string, category: string) =>
-    api.get<ComponentAttachment[]>(`/components/${componentId}/attachments`, { params: { category } }),
-  remove: (componentId: string, attachmentId: string) =>
-    api.delete(`/components/${componentId}/attachments/${attachmentId}`),
+export const partAttachmentsApi = {
+  list: (partId: string, category: string) =>
+    api.get<PartAttachment[]>(`/components/${partId}/attachments`, { params: { category } }),
+  remove: (partId: string, attachmentId: string) =>
+    api.delete(`/components/${partId}/attachments/${attachmentId}`),
 };
 
 // 媒体令牌 API（替代 ?token= 的会话 JWT）

@@ -56,11 +56,11 @@ def _attachment_response(att):
 
 
 def _resolve_attachment(db, attachment_id):
-    from ..models import ComponentAttachment
+    from ..models import PartAttachment
     att = db.query(DocumentAttachment).filter(DocumentAttachment.id == attachment_id).first()
     if att:
         return att, "document"
-    catt = db.query(ComponentAttachment).filter(ComponentAttachment.id == attachment_id).first()
+    catt = db.query(PartAttachment).filter(PartAttachment.id == attachment_id).first()
     if catt:
         return catt, "component"
     return None, None
@@ -137,11 +137,11 @@ async def upload_file(
             folder_name=folder_name,
         )
 
-        # 零部件附件：写入独立表 component_attachments
+        # 零部件附件：写入独立表 part_attachments
         if entity_type in ("component", "components"):
-            from ..models import ComponentAttachment
+            from ..models import PartAttachment
             catt_id = uuid.uuid4()
-            new_catt = ComponentAttachment(
+            new_catt = PartAttachment(
                 id=catt_id,
                 part_master_id=uuid.UUID(entity_id),
                 category=category or "cad",
@@ -324,9 +324,9 @@ async def complete_chunked_upload(
         file_info = result["file_info"]
 
         if file_info["entity_type"] in ("component", "components"):
-            from ..models import ComponentAttachment
+            from ..models import PartAttachment
             catt_id = uuid.uuid4()
-            new_catt = ComponentAttachment(
+            new_catt = PartAttachment(
                 id=catt_id,
                 component_id=uuid.UUID(file_info["entity_id"]),
                 category=file_info.get("category") or "cad",

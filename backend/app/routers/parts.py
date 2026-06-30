@@ -13,7 +13,8 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.crud.part import (
@@ -33,6 +34,7 @@ from app.schemas.part import (
     PartCreate,
     PartListItem,
     PartResponse,
+    _to_camel,
 )
 
 router = APIRouter(prefix="/api/parts", tags=["零件管理"])
@@ -114,6 +116,40 @@ def get_part_endpoint(
         pass
     # 按 number 查
     master = get_part(db, number=identifier, workspace_id=workspace_id)
+    return _enrich_response(db, master)
+
+
+class PartUpdateFields(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    type: Optional[str] = Field(None, max_length=50)
+    standard_part: Optional[bool] = None
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+
+@router.put("/{identifier}", response_model=PartResponse, summary="更新零件主数据")
+def update_part_endpoint(
+    identifier: str,
+    data: PartUpdateFields,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    uid = uuid.UUID(identifier)
+    master = db.query(PartMaster).filter(
+        PartMaster.id == uid,
+        PartMaster.deleted_at.is_(None),
+    ).first()
+    if not master:
+        raise HTTPException(status_code=404, detail="零部件不存在")
+    if data.name is not None:
+        master.name = data.name
+    if data.type is not None:
+        master.type = data.type
+    if data.standard_part is not None:
+        master.standard_part = data.standard_part
+    db.commit()
+    db.refresh(master)
     return _enrich_response(db, master)
 
 
@@ -219,12 +255,9 @@ def undocheckout_endpoint(
 # ---------------------------------------------------------------------------
 
 def _enrich_response(db: Session, master) -> PartResponse:
-    """
-    把 PartMaster ORM 对象连同其版本/迭代一起组装成 PartResponse。
-    手动 eager load，避免 lazy load 在 session 关闭后报错。
-    """
     from app.models.part import PartIteration, PartRevision
-    from app.schemas.part import IterationResponse, RevisionResponse
+    from app.models.assembly import PartUsageLink
+    from app.schemas.part import IterationResponse, RevisionResponse, UsageLinkBriefSchema
 
     revisions_orm = (
         db.query(PartRevision)
@@ -249,4 +282,33 @@ def _enrich_response(db: Session, master) -> PartResponse:
 
     resp = PartResponse.model_validate(master)
     resp.revisions = revisions
+
+    if revisions:
+        latest_rev = revisions[-1]
+        resp.latest_version = latest_rev.version
+        resp.latest_status = latest_rev.status
+        resp.checkout_user_id = latest_rev.checkout_user_id
+
+    usage_links = (
+        db.query(PartUsageLink)
+        .join(PartIteration, PartUsageLink.parent_iteration_id == PartIteration.id)
+        .join(PartRevision, PartIteration.part_revision_id == PartRevision.id)
+        .filter(PartRevision.part_master_id == master.id)
+        .order_by(PartUsageLink.order)
+        .all()
+    )
+    if usage_links:
+        resp.is_assembly = True
+        resp.child_count = len(usage_links)
+        ulinks = []
+        for link in usage_links:
+            child = db.get(PartMaster, link.component_master_id)
+            ulinks.append(UsageLinkBriefSchema(
+                component_number=child.number if child else "?",
+                component_name=child.name if child else "?",
+                amount=link.amount,
+                unit=link.unit,
+            ))
+        resp.usage_links = ulinks
+
     return resp

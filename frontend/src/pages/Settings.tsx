@@ -15,11 +15,13 @@ const FIELD_TYPES = [
   { value: 'text', label: '单行文本' },
   { value: 'number', label: '数字' },
   { value: 'select', label: '下拉选择' },
+  { value: 'multiselect', label: '多选' },
 ] as const;
 
 const ENTITY_TYPES = [
   { value: 'part', label: '零部件' },
   { value: 'document', label: '图文档' },
+  { value: 'configuration', label: '构型项' },
 ] as const;
 
 // 将后端 applies_to 数组归一化为展示用的标签列表
@@ -29,15 +31,17 @@ function displayAppliesTo(applies_to: string[]): string[] {
 
 // 编辑时，将归一化的标签列表转回 checkbox 选中值（旧数据可能有 'component' 兼容处理）
 function expandAppliesTo(applies_to: string[]): string[] {
-  const normalized = applies_to.includes('part') || applies_to.includes('assembly') || applies_to.includes('component') ? ['part'] : [];
+  const normalized: string[] = [];
+  if (applies_to.includes('part') || applies_to.includes('assembly') || applies_to.includes('component')) normalized.push('part');
   if (applies_to.includes('document')) normalized.push('document');
+  if (applies_to.includes('configuration')) normalized.push('configuration');
   return normalized;
 }
 
 interface FieldFormData {
   name: string;
   field_key: string;
-  field_type: 'text' | 'number' | 'select';
+  field_type: 'text' | 'number' | 'select' | 'multiselect';
   options: string;
   is_required: boolean;
   applies_to: string[];
@@ -172,7 +176,7 @@ export default function Settings() {
     setFormData({
       name: field.name,
       field_key: field.field_key,
-      field_type: field.field_type as 'text' | 'number' | 'select',
+      field_type: field.field_type as 'text' | 'number' | 'select' | 'multiselect',
       options: (field.options || []).join('\n'),
       is_required: field.is_required,
       applies_to: expandAppliesTo(appliesToArray),
@@ -832,7 +836,7 @@ export default function Settings() {
               <label className="block text-xs text-gray-500 mb-0.5">字段类型</label>
               <select
                 value={formData.field_type}
-                onChange={(e) => setFormData({ ...formData, field_type: e.target.value as 'text' | 'number' | 'select' })}
+                onChange={(e) => setFormData({ ...formData, field_type: e.target.value as 'text' | 'number' | 'select' | 'multiselect' })}
                 className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {FIELD_TYPES.map((type) => (
@@ -851,7 +855,7 @@ export default function Settings() {
               />
               <p className="mt-1 text-xs text-gray-400">越小越靠前</p>
             </div>
-            {formData.field_type === 'select' && (
+            {(formData.field_type === 'select' || formData.field_type === 'multiselect') && (
               <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 col-span-2">
                 <label className="block text-xs text-gray-500 mb-0.5">选项</label>
                 <textarea

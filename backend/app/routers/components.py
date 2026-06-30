@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app.models.part import PartMaster
-from app.models.pdm import ComponentAttachment
+from app.models.pdm import PartAttachment
 from app.models.models_document import Document
 from app.routers.auth import get_current_active_user
 from app.core.permissions import require_permission
@@ -51,12 +51,12 @@ def list_attachments(
     current_user: User = Depends(get_current_active_user),
 ):
     _get_part_master(db, part_master_id)
-    q = db.query(ComponentAttachment).filter(
-        ComponentAttachment.part_master_id == part_master_id,
+    q = db.query(PartAttachment).filter(
+        PartAttachment.part_master_id == part_master_id,
     )
     if category:
-        q = q.filter(ComponentAttachment.category == category)
-    return q.order_by(ComponentAttachment.created_at.desc()).all()
+        q = q.filter(PartAttachment.category == category)
+    return q.order_by(PartAttachment.created_at.desc()).all()
 
 
 @router.delete("/{part_master_id}/attachments/{attachment_id}")
@@ -67,9 +67,9 @@ def delete_attachment(
     current_user: User = Depends(require_permission("components:manage")),
 ):
     _get_part_master(db, part_master_id)
-    att = db.query(ComponentAttachment).filter(
-        ComponentAttachment.id == attachment_id,
-        ComponentAttachment.part_master_id == part_master_id,
+    att = db.query(PartAttachment).filter(
+        PartAttachment.id == attachment_id,
+        PartAttachment.part_master_id == part_master_id,
     ).first()
     if not att:
         raise HTTPException(status_code=404, detail="附件不存在")

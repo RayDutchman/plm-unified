@@ -33,7 +33,7 @@ class PartRevision(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "part_revisions"
     __table_args__ = (
         UniqueConstraint("part_master_id", "version", name="uq_part_revision_master_version"),
-        CheckConstraint("status IN ('WIP','RELEASED','OBSOLETE')", name="ck_part_revision_status"),
+        CheckConstraint("status IN ('WIP','FROZEN','RELEASED','OBSOLETE')", name="ck_part_revision_status"),
         Index("idx_part_revisions_master", "part_master_id"),
         Index("idx_part_revisions_checkout", "checkout_user_id"),
         Index("idx_part_revisions_status", "status"),
