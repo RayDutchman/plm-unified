@@ -47,12 +47,12 @@ app.include_router(bom_router, prefix="/api")
 # Phase 3: 流程层
 from app.routers.ecrs import router as ecrs_router
 app.include_router(ecrs_router, prefix="/api")
-# from app.routers.ecos import router as ecos_router
-# app.include_router(ecos_router, prefix="/api")
+from app.routers.ecos import router as ecos_router
+app.include_router(ecos_router, prefix="/api")
 
 # Phase 4: 构型+库存+项目
-# from app.routers.configuration import router as configuration_router
-# app.include_router(configuration_router, prefix="/api")
+from app.routers.configuration import router as configuration_router
+app.include_router(configuration_router, prefix="/api")
 from app.routers.inventory import router as inventory_router
 app.include_router(inventory_router, prefix="/api")
 # from app.routers.projects import router as projects_router

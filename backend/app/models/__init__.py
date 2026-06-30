@@ -7,9 +7,15 @@ from app.models.user_groups import UserGroup, user_group_members
 from app.models.models_document import Document, DocumentAttachment, DocumentLink, DocumentGroupLink
 from app.models.pdm import Component, ComponentAttachment
 from app.models.models_ecr import ECR, ECRAffectedItem, ECRReviewRecord, ECRStatusLog
+from app.models.models_eco import ECO, ECOExecutionItem, ECOReviewRecord as ECOReview, ECOStatusLog as ECOStatus
 from app.models.models_inventory import (
     Warehouse, InventoryMaterial, InventoryStock, InventoryLedger,
     InventoryDocument, InventoryDocumentLine, InventoryReviewRecord, InventoryStatusLog,
+)
+from app.models.models_configuration import (
+    ConfigurationItem, ConfigurationItemPart, ConfigurationItemChild,
+    ConfigurationProfile, ConfigurationProfileItem, ConfigurationWorkingItem,
+    ConfigurationReviewRecord, ConfigurationStatusLog,
 )
 
 __all__ = [
@@ -21,6 +27,10 @@ __all__ = [
     "Document", "DocumentAttachment", "DocumentLink", "DocumentGroupLink",
     "Component", "ComponentAttachment",
     "ECR", "ECRAffectedItem", "ECRReviewRecord", "ECRStatusLog",
+    "ECO", "ECOExecutionItem", "ECOReview", "ECOStatus",
     "Warehouse", "InventoryMaterial", "InventoryStock", "InventoryLedger",
     "InventoryDocument", "InventoryDocumentLine", "InventoryReviewRecord", "InventoryStatusLog",
+    "ConfigurationItem", "ConfigurationItemPart", "ConfigurationItemChild",
+    "ConfigurationProfile", "ConfigurationProfileItem", "ConfigurationWorkingItem",
+    "ConfigurationReviewRecord", "ConfigurationStatusLog",
 ]
