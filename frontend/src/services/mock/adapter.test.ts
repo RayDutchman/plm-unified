@@ -25,4 +25,18 @@ describe('mockAdapter', () => {
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
+
+  it('零部件列表返回 items', async () => {
+    const resp = await mockAdapter(cfg('get', '/parts'));
+    expect(resp.status).toBe(200);
+    expect(Array.isArray(resp.data.items)).toBe(true);
+    expect(resp.data.items.length).toBeGreaterThan(0);
+  });
+
+  it('零部件详情：装配体含 usage_links', async () => {
+    const resp = await mockAdapter(cfg('get', '/parts/ASM-100'));
+    expect(resp.data.number).toBe('ASM-100');
+    expect(resp.data.is_assembly).toBe(true);
+    expect(resp.data.usage_links.length).toBeGreaterThan(0);
+  });
 });
