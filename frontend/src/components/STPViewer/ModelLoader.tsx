@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { useLoader } from '@react-three/fiber';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { useViewerStore } from '../../stores/viewerStore';
 import { buildModelTree } from './buildModelTree';
 import { buildColorMap } from './autoColor';
@@ -42,6 +45,35 @@ export function ModelLoader({ url }: ModelLoaderProps) {
       if (m.isMesh && m.material && !Array.isArray(m.material)) {
         m.material = (m.material as THREE.Material).clone();
       }
+    });
+
+    // P1.3：为每个 Mesh 附加 Line2 边线（黑色轮廓，真实像素宽度，不随相机缩小消失）
+    // 边线挂在父 Group 上，命名 _edges 以便后续可识别跳过
+    const edgeMat = new LineMaterial({ color: 0x222222, linewidth: 1.0, depthTest: true });
+    gltf.scene.traverse((child) => {
+      const m = child as THREE.Mesh;
+      if (!m.isMesh || m.name === '_edges') return;
+      const edges = new THREE.EdgesGeometry(m.geometry, 15); // 15° 折角阈值
+      const positions: number[] = [];
+      const pos = edges.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        positions.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+      }
+      if (positions.length === 0) return;
+      const lineGeo = new LineGeometry();
+      // LineGeometry 需要按线段对排列：每两个点一段
+      const segPositions: number[] = [];
+      for (let i = 0; i < positions.length; i += 6) {
+        segPositions.push(
+          positions[i], positions[i + 1], positions[i + 2],
+          positions[i + 3], positions[i + 4], positions[i + 5],
+        );
+      }
+      lineGeo.setPositions(segPositions);
+      const line = new Line2(lineGeo, edgeMat);
+      line.name = '_edges';
+      line.computeLineDistances();
+      m.add(line);
     });
 
     // 2) 解析装配树
@@ -181,7 +213,21 @@ export function ModelLoader({ url }: ModelLoaderProps) {
       pointerDown.current = null;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) return;
     }
-    if (e.object?.uuid) selectByMesh(e.object.uuid);
+    if (e.object?.uuid) {
+      selectByMesh(e.object.uuid);
+      // P2.2：选中后飞向该零件（计算世界空间包围球）
+      const mesh = e.object as THREE.Mesh;
+      if (mesh.geometry) {
+        mesh.geometry.computeBoundingBox();
+        const box = mesh.geometry.boundingBox!.clone().applyMatrix4(mesh.matrixWorld);
+        const center = box.getCenter(new THREE.Vector3());
+        const radius = box.getSize(new THREE.Vector3()).length() / 2;
+        useViewerStore.getState().flyTo(
+          [center.x, center.y, center.z],
+          radius,
+        );
+      }
+    }
   };
 
   return (

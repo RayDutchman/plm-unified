@@ -13,15 +13,19 @@
   PUT  /api/parts/{number}/{version}/iterations/{iteration}/conversion
        conversion 服务回调（写入 geometry + 更新转换状态）
 
+  GET  /api/parts/{number}/{version}/iterations/{iteration}/geometry
+       P3.3：按 quality 获取 GLB 文件流（LOD0/1/2）
+
   GET  /api/parts/{number}/{version}/iterations/{iteration}/conversion
        查询转换状态（pending / succeed / startDate / endDate）
 """
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, File, Query, Request, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict
 
 from app.schemas.part import _to_camel
@@ -36,6 +40,7 @@ from app.crud.conversion import (
 )
 from app.database import get_db
 from app.models import User
+from app.models.part import PartIteration, PartMaster, PartRevision
 from app.routers.auth import get_current_active_user
 from app.schemas.assembly import (
     InstanceResponse,
@@ -302,4 +307,115 @@ def get_conversion(
         version=version,
         iteration_number=iteration,
         workspace_id=workspace_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# P3.3：GLB 文件流接口（前端 LOD 按质量等级拉取 geometry）
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{number}/{version}/iterations/{iteration}/geometry",
+    summary="获取 GLB 几何文件流（LOD0/1/2）",
+)
+def get_geometry_file(
+    number: str,
+    version: str,
+    iteration: int,
+    quality: int = Query(0, ge=0, le=2, description="LOD 质量等级：0=最高 1=中等 2=最低"),
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    按 quality 等级返回指定迭代的 GLB 文件流。
+
+    - quality=0：最高精度（默认，首次加载用）
+    - quality=1：中等精度（中距离）
+    - quality=2：最低精度（远距离/LOD Worker 调度）
+
+    若请求的 quality 不存在则自动降级到最近可用等级。
+    返回 application/octet-stream，Content-Type: model/gltf-binary。
+    """
+    from fastapi.responses import FileResponse
+    from app.core.config import settings
+    from app.models.binary import Geometry, BinaryResource
+
+    # 查迭代
+    master = (
+        db.query(PartMaster)
+        .filter(
+            PartMaster.workspace_id == workspace_id,
+            PartMaster.number == number,
+            PartMaster.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not master:
+        raise HTTPException(status_code=404, detail=f"零件 {number!r} 不存在")
+
+    revision = (
+        db.query(PartRevision)
+        .filter(
+            PartRevision.part_master_id == master.id,
+            PartRevision.version == version,
+            PartRevision.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if not revision:
+        raise HTTPException(status_code=404, detail=f"版本 {version!r} 不存在")
+
+    iter_obj = (
+        db.query(PartIteration)
+        .filter(
+            PartIteration.part_revision_id == revision.id,
+            PartIteration.iteration == iteration,
+        )
+        .first()
+    )
+    if not iter_obj:
+        raise HTTPException(status_code=404, detail=f"迭代 {iteration} 不存在")
+
+    # 优先返回请求的 quality，若不存在则降级到更低精度（更高 quality 数字）
+    geos = (
+        db.query(Geometry)
+        .filter(Geometry.iteration_id == iter_obj.id)
+        .order_by(Geometry.quality)
+        .all()
+    )
+    if not geos:
+        raise HTTPException(status_code=404, detail="该迭代尚无 geometry 记录，请先上传并等待转换完成")
+
+    # 找最接近请求 quality 的记录（优先精确匹配，其次取最近可用）
+    target_geo = None
+    for g in geos:
+        if g.quality == quality:
+            target_geo = g
+            break
+    if target_geo is None:
+        # 降级：取 quality >= 请求值的最小等级（更粗糙），再退而取 quality=0
+        for g in geos:
+            if g.quality >= quality:
+                target_geo = g
+                break
+        if target_geo is None:
+            target_geo = geos[0]  # fallback：最高精度
+
+    br = db.get(BinaryResource, target_geo.binary_resource_id)
+    if not br:
+        raise HTTPException(status_code=404, detail="Geometry BinaryResource 记录缺失")
+
+    file_path = os.path.join(settings.vault_path, br.full_name)
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"GLB 文件不存在于 vault：{br.full_name}",
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type="model/gltf-binary",
+        filename=os.path.basename(br.full_name),
+        headers={"X-LOD-Quality": str(target_geo.quality)},
     )
