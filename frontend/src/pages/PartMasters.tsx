@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { partMasterApi } from '../services/partMasterApi';
 import type { PartMasterListItem, PartMasterDetail } from '../services/partMasterApi';
 
@@ -94,9 +94,8 @@ export default function PartMasters() {
               <tr><td colSpan={8} className="px-3 py-6 text-center text-gray-400">暂无零部件</td></tr>
             )}
             {!loading && items.map((it) => (
-              <>
+              <Fragment key={it.number}>
                 <tr
-                  key={it.number}
                   className="border-t hover:bg-gray-50 cursor-pointer"
                   onClick={() => toggle(it.number)}
                 >
@@ -110,13 +109,13 @@ export default function PartMasters() {
                   <td className="px-3 py-2 text-gray-600">{it.checkout_user ?? '—'}</td>
                 </tr>
                 {expanded === it.number && (
-                  <tr key={`${it.number}-detail`} className="bg-gray-50/60">
+                  <tr className="bg-gray-50/60">
                     <td colSpan={8} className="px-6 py-3">
                       <DetailPanel detail={details[it.number]} />
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
