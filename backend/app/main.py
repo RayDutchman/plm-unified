@@ -5,6 +5,7 @@ from app.routers import auth
 from app.routers.parts import router as parts_router
 from app.routers.iterations import router as iterations_router
 from app.routers.conversion_compat import router as conversion_compat_router
+from app.routers.components import router as components_router
 
 app = FastAPI(
     title="PLM Unified API",
@@ -29,6 +30,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(parts_router)
 app.include_router(iterations_router)
 app.include_router(conversion_compat_router, prefix="/api")
+app.include_router(components_router)
 
 # Phase 1: 实体层（逐步取消注释激活）
 from app.routers.users import router as users_router

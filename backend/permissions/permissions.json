@@ -24,6 +24,7 @@
 
     "components:create": ["admin", "engineer"],
     "components:delete": ["admin"],
+    "components:manage": ["admin", "engineer"],
     "components:read": ["admin", "engineer", "production", "guest"],
     "components:update": ["admin", "engineer"],
     "components.doc:link": ["admin", "engineer"],
