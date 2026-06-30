@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useAuthStore } from './stores/auth';
 import Layout from './components/Layout';
@@ -23,8 +23,10 @@ const ViewerPage = lazy(() => import('./pages/AssemblyViewerPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
+  const location = useLocation();
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // 把当前完整路径（含 query）作为 redirect 参数传给登录页
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
   return <>{children}</>;
 }

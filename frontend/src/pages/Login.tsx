@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/auth';
 import { authApi } from '../services/api';
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -18,13 +19,13 @@ export default function Login() {
     try {
       const response = await authApi.login(username, password);
       const { access_token, refresh_token } = response.data;
-      // 先设置 token，这样才能在 getCurrentUser 中携带
       useAuthStore.getState().setUser(null, access_token);
       if (refresh_token) localStorage.setItem('refresh_token', refresh_token);
-      // 获取用户信息
       const userResponse = await authApi.getCurrentUser();
       useAuthStore.getState().setUser(userResponse.data, access_token);
-      navigate('/');
+      // 登录成功后跳回原始目标页，默认跳首页
+      const redirect = searchParams.get('redirect') || '/';
+      navigate(redirect, { replace: true });
     } catch (err) {
       setError('用户名或密码错误');
     } finally {
