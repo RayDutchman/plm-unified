@@ -144,7 +144,7 @@ function InstanceMesh({ instance, buffer, selected, onSelect }: InstanceMeshProp
   if (!scene) return null;
 
   return (
-    <group matrix={instanceMatrix}>
+    <group matrix={instanceMatrix} matrixAutoUpdate={false}>
       <primitive
         object={scene}
         onPointerDown={handlePointerDown}
