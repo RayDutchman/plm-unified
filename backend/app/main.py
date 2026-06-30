@@ -41,8 +41,8 @@ from app.routers.attachments_v2 import router as attachments_router
 app.include_router(attachments_router, prefix="/api")
 
 # Phase 2: 关系层
-# from app.routers.bom import router as bom_router
-# app.include_router(bom_router, prefix="/api")
+from app.routers.bom import router as bom_router
+app.include_router(bom_router, prefix="/api")
 
 # Phase 3: 流程层
 # from app.routers.ecrs import router as ecrs_router
