@@ -102,16 +102,16 @@ export const partsApi = {
     api.get('/parts/export', { params, responseType: 'blob' }),
 };
 
-// 部件 API
+// 部件 API（统一使用 PartMaster 端点，适配旧接口格式）
 export const assembliesApi = {
   list: (params?: { page?: number; page_size?: number; search?: string; status?: string; brief?: boolean; updated_since?: number; top_level?: boolean }) =>
-    api.get('/assemblies/', { params }),
-  get: (id: string) => api.get(`/assemblies/${id}`),
-  create: (data: unknown) => api.post('/assemblies/', data),
-  update: (id: string, data: unknown) => api.put(`/assemblies/${id}`, data),
-  delete: (id: string) => api.delete(`/assemblies/${id}`),
-  upgrade: (id: string, note?: string) => api.post(`/assemblies/${id}/upgrade`, { note }),
-  versions: (id: string) => api.get(`/assemblies/${id}/versions`),
+    api.get('/parts', { params: { ...params, workspace_id: useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001' } }),
+  get: (id: string) => api.get(`/parts/${encodeURIComponent(id)}`, { params: { workspace_id: useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001' } }),
+  create: (data: unknown) => api.post('/parts', data),
+  update: (id: string, data: unknown) => api.put(`/parts/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => api.delete(`/parts/${encodeURIComponent(id)}`),
+  upgrade: (id: string, note?: string) => api.post(`/parts/${encodeURIComponent(id)}/upgrade`, { note }),
+  versions: (id: string) => api.get(`/parts/${encodeURIComponent(id)}/versions`),
   exportBOM: (id: string) =>
     api.get(`/assemblies/${id}/bom/export`, { responseType: 'blob' }),
 };
