@@ -108,7 +108,7 @@ export const documentsFixtureRoutes: MockRoute[] = [
     method: 'get',
     pattern: /^\/documents\/([^/]+)\/attachments\/$/,
     keys: ['id'],
-    handler: ({ params }) => ({ items: attachments.filter((a) => a.document_id === params.id), total: attachments.filter((a) => a.document_id === params.id).length }),
+    handler: ({ params }) => attachments.filter((a) => a.document_id === params.id),
   },
   {
     method: 'get',

@@ -100,13 +100,10 @@ export const settingsRoutes: MockRoute[] = [
   {
     method: 'get',
     pattern: /^\/user-groups\/$/,
-    handler: () => ({
-      items: [
-        { id: 'ug-1', name: '管理员组', description: '系统管理员组', member_count: 1, created_at: now },
-        { id: 'ug-2', name: '设计组', description: '研发设计人员', member_count: 2, created_at: now },
-      ],
-      total: 2,
-    }),
+    handler: () => [
+      { id: 'ug-1', name: '管理员组', description: '系统管理员组', member_count: 1, created_at: now },
+      { id: 'ug-2', name: '设计组', description: '研发设计人员', member_count: 2, created_at: now },
+    ],
   },
   { method: 'post', pattern: /^\/user-groups\/$/, handler: ({ body }) => ({ id: `ug-${Date.now()}`, ...body, created_at: now }) },
   { method: 'put', pattern: /^\/user-groups\/([^/]+)$/, handler: ({ params, body }) => ({ id: params[0], ...body, updated_at: now }) },
