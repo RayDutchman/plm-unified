@@ -1497,10 +1497,9 @@ export default function Components() {
                 基础信息
               </button>
 
-              {((viewingAssembly as any)?.document_links?.length > 0) && (
-                <button
-                  onClick={() => setDetailTab('docs')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              <button
+                onClick={() => setDetailTab('docs')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     detailTab === 'docs'
                       ? 'border-primary-600 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -1508,7 +1507,6 @@ export default function Components() {
                 >
                   关联图文档
                 </button>
-              )}
 
               <button
                 onClick={() => setDetailTab('attachments')}
@@ -1521,10 +1519,9 @@ export default function Components() {
                 附件
               </button>
 
-              {viewParts.length > 0 && (
-                <button
-                  onClick={() => setDetailTab('bom')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              <button
+                onClick={() => setDetailTab('bom')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                     detailTab === 'bom'
                       ? 'border-primary-600 text-primary-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -1532,7 +1529,6 @@ export default function Components() {
                 >
                   子项清单
                 </button>
-              )}
 
               <button
                 onClick={() => setDetailTab('versions')}
