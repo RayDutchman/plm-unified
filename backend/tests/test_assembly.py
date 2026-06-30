@@ -125,6 +125,59 @@ class TestWriteComponents:
         assert insts[0].rotation_type == "ANGLE"
         assert insts[0].rx == 0.0
 
+    def test_matrix_roundtrip_real_rotation(self, db, workspace, user_a, part_a, part_b):
+        """
+        写入非单位旋转矩阵（120° 绕 Z 轴），读出后通过 _cad_instance_to_matrix 转换，
+        验证结果与期望一致。这是 2.4 发现的核心 bug（列优先存储）的回归测试。
+        """
+        import math
+        cos120 = math.cos(2 * math.pi / 3)  # -0.5
+        sin120 = math.sin(2 * math.pi / 3)  # 0.866...
+
+        # 绕 Z 轴 120° 旋转矩阵（行优先输入）：
+        # R = [[cos, -sin, 0],
+        #      [sin,  cos, 0],
+        #      [0,    0,   1]]
+        matrix_row_major = [
+            cos120, -sin120, 0.0,
+            sin120,  cos120, 0.0,
+            0.0,     0.0,    1.0,
+        ]
+
+        write_components(
+            db=db,
+            number="ASM-001", version="A", iteration_number=1,
+            workspace_id=workspace.id, current_user_id=user_a.id,
+            components=[
+                UsageLinkCreate(
+                    component_number="PART-B",
+                    cad_instances=[
+                        CADInstanceCreate(
+                            rotation_type="MATRIX",
+                            tx=10.0, ty=20.0, tz=0.0,
+                            matrix=matrix_row_major,
+                        )
+                    ],
+                )
+            ],
+        )
+
+        inst = db.query(CADInstance).first()
+        assert inst.rotation_type == "MATRIX"
+
+        # 读出并转为 4×4 矩阵
+        computed = _cad_instance_to_matrix(inst)
+
+        # 期望值：120° 绕 Z 轴 + 平移 (10, 20, 0)
+        expected = np.array([
+            [cos120, -sin120, 0, 10.0],
+            [sin120,  cos120, 0, 20.0],
+            [0,       0,      1,  0.0],
+            [0,       0,      0,  1.0],
+        ])
+
+        np.testing.assert_allclose(computed, expected, atol=1e-10)
+
     def test_write_matrix_instance(self, db, workspace, user_a, part_a, part_b):
         """写入一个 MATRIX 模式的 CAD 实例（单位矩阵）。"""
         write_components(

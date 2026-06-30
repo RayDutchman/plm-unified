@@ -191,12 +191,15 @@ def _build_cad_instance(usage_link_id: uuid.UUID, data: CADInstanceCreate) -> CA
                 detail="MATRIX 模式需要提供 9 个 double 的 matrix 数组（行优先）",
             )
         m = data.matrix
-        # 注意：DocDoku RotationMatrix 构造函数接收行优先数组但以列优先存储
-        # m[row*3+col] → 存入 m{col}{row}（转置）
-        # 为与 Java 端一致，按相同逻辑存储
-        inst.m00 = m[0]; inst.m10 = m[1]; inst.m20 = m[2]  # 第一列
-        inst.m01 = m[3]; inst.m11 = m[4]; inst.m21 = m[5]  # 第二列
-        inst.m02 = m[6]; inst.m12 = m[7]; inst.m22 = m[8]  # 第三列
+        # 输入 matrix 为行优先：m[row*3+col] = R[row][col]
+        # DocDoku 字段为列优先：m{col}{row} = R[row][col]
+        # 所以：m{col}{row} = m[row*3+col]
+        #   第 0 列（col=0）：m00=m[0], m10=m[3], m20=m[6]
+        #   第 1 列（col=1）：m01=m[1], m11=m[4], m21=m[7]
+        #   第 2 列（col=2）：m02=m[2], m12=m[5], m22=m[8]
+        inst.m00 = m[0]; inst.m10 = m[3]; inst.m20 = m[6]  # 第 0 列
+        inst.m01 = m[1]; inst.m11 = m[4]; inst.m21 = m[7]  # 第 1 列
+        inst.m02 = m[2]; inst.m12 = m[5]; inst.m22 = m[8]  # 第 2 列
 
     return inst
 
@@ -432,11 +435,18 @@ def _cad_instance_to_matrix(inst: CADInstance) -> np.ndarray:
         mat = T @ Rz @ Ry @ Rx
 
     else:  # MATRIX
-        # DocDoku 以列优先存储：m{col}{row}
-        # 读取时还原为行优先 3×3
-        mat[0, 0] = inst.m00 or 0.0; mat[0, 1] = inst.m01 or 0.0; mat[0, 2] = inst.m02 or 0.0
-        mat[1, 0] = inst.m10 or 0.0; mat[1, 1] = inst.m11 or 0.0; mat[1, 2] = inst.m12 or 0.0
-        mat[2, 0] = inst.m20 or 0.0; mat[2, 1] = inst.m21 or 0.0; mat[2, 2] = inst.m22 or 0.0
+        # DocDoku RotationMatrix 字段命名：m{col}{row}（列优先存储）
+        # 即：m00=R[0][0], m10=R[1][0], m20=R[2][0]（第 0 列）
+        #     m01=R[0][1], m11=R[1][1], m21=R[2][1]（第 1 列）
+        #     m02=R[0][2], m12=R[1][2], m22=R[2][2]（第 2 列）
+        # 填入 4×4 矩阵时：mat[row][col] = m{col}{row}
+        # 列 0
+        mat[0, 0] = inst.m00 or 0.0; mat[1, 0] = inst.m10 or 0.0; mat[2, 0] = inst.m20 or 0.0
+        # 列 1
+        mat[0, 1] = inst.m01 or 0.0; mat[1, 1] = inst.m11 or 0.0; mat[2, 1] = inst.m21 or 0.0
+        # 列 2
+        mat[0, 2] = inst.m02 or 0.0; mat[1, 2] = inst.m12 or 0.0; mat[2, 2] = inst.m22 or 0.0
+        # 平移
         mat[0, 3] = inst.tx or 0.0
         mat[1, 3] = inst.ty or 0.0
         mat[2, 3] = inst.tz or 0.0
