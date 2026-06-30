@@ -61,6 +61,14 @@ def parse_args():
                         help="Ignored (kept for Java caller compatibility)")
     parser.add_argument("--deflection", type=float, default=0.05)
     parser.add_argument("--angular",    type=float, default=0.3)
+    # P3.1：多精度 LOD 模式
+    # 启用后忽略 --deflection/--angular，输出三个文件：
+    #   {stem}100.glb  LOD0 高精度 deflection=0.02, angular=0.15
+    #   {stem}60.glb   LOD1 中精度 deflection=0.05, angular=0.30
+    #   {stem}20.glb   LOD2 低精度 deflection=0.15, angular=0.60
+    # 文件名后缀与 OpenMeshDecimater 命名约定一致，使回调 body 格式统一
+    parser.add_argument("--lod", action="store_true", default=False,
+                        help="Generate three LOD GLB files (LOD0/LOD1/LOD2)")
     return parser.parse_args()
 
 
@@ -488,26 +496,69 @@ def main():
     args = parse_args()
     input_file  = args.inputFile
     output_file = args.outputFile
-    deflection  = args.deflection
-    angular     = args.angular
 
     if not os.path.exists(input_file):
         sys.exit("Error: input file not found: %s" % input_file)
 
+    # 读取 STEP（XDE CAF 框架），doc 必须在三角化全部完成前保持存活
     doc, st, ct, labels = read_step(input_file)
     solid_colors = collect_solid_colors(st, ct, labels, filepath=input_file)
 
-    gltf = build_glb(solid_colors, deflection, angular)
-    if gltf is None:
-        sys.exit("Error: no geometry generated from %s" % input_file)
+    if args.lod:
+        # ----------------------------------------------------------------
+        # P3.1：多精度 LOD 模式，生成三个 GLB 文件
+        # 文件名：{stem}100.glb / {stem}60.glb / {stem}20.glb
+        # ----------------------------------------------------------------
+        LOD_CONFIGS = [
+            (100, 0.02, 0.15),   # LOD0：高精度
+            (60,  0.05, 0.30),   # LOD1：中精度
+            (20,  0.15, 0.60),   # LOD2：低精度
+        ]
+        stem, ext = os.path.splitext(output_file)
+        # 确保后缀是 .glb
+        if ext.lower() != '.glb':
+            stem = output_file
 
-    gltf.save_binary(output_file)
-    size_kb = os.path.getsize(output_file) / 1024
-    print("Converted %s -> %s (%.1f KB, %d solid(s))" % (
-        os.path.basename(input_file),
-        os.path.basename(output_file),
-        size_kb,
-        len(solid_colors)))
+        any_success = False
+        for suffix, deflection, angular in LOD_CONFIGS:
+            lod_path = "%s%d.glb" % (stem, suffix)
+            gltf = build_glb(solid_colors, deflection, angular)
+            if gltf is None:
+                print("Warning: LOD%d no geometry, skipping %s" % (suffix, lod_path),
+                      file=sys.stderr)
+                continue
+            gltf.save_binary(lod_path)
+            size_kb = os.path.getsize(lod_path) / 1024
+            print("LOD%d: %s -> %s (%.1f KB, %d solid(s), deflection=%.3f)" % (
+                suffix,
+                os.path.basename(input_file),
+                os.path.basename(lod_path),
+                size_kb,
+                len(solid_colors),
+                deflection,
+            ))
+            any_success = True
+
+        if not any_success:
+            sys.exit("Error: no LOD geometry generated from %s" % input_file)
+    else:
+        # ----------------------------------------------------------------
+        # 单精度模式（原有行为，保持兼容）
+        # ----------------------------------------------------------------
+        deflection = args.deflection
+        angular    = args.angular
+
+        gltf = build_glb(solid_colors, deflection, angular)
+        if gltf is None:
+            sys.exit("Error: no geometry generated from %s" % input_file)
+
+        gltf.save_binary(output_file)
+        size_kb = os.path.getsize(output_file) / 1024
+        print("Converted %s -> %s (%.1f KB, %d solid(s))" % (
+            os.path.basename(input_file),
+            os.path.basename(output_file),
+            size_kb,
+            len(solid_colors)))
 
 
 if __name__ == "__main__":

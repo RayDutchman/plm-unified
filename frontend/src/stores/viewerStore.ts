@@ -27,6 +27,10 @@ export interface ViewerState {
   autoColor: boolean;
   cameraMode: 'orthographic' | 'perspective';
   viewTarget: string | null;
+  // P2.1 截图：外部触发，ViewerCanvas 内监听执行
+  screenshotTrigger: number;
+  // P2.2：飞向选中件——store 存 boundingSphere，CameraController 消费后清空
+  flyToBounds: { center: [number, number, number]; radius: number } | null;
   cameraQuat: [number, number, number, number];
   resetViewTrigger: number;
   // 初始状态（重置时恢复）
@@ -54,6 +58,11 @@ export interface ViewerState {
   toggleAutoColor: () => void;
   toggleCameraMode: () => void;
   setViewTarget: (view: string | null) => void;
+  // P2.1 截图触发器
+  triggerScreenshot: () => void;
+  // P2.2 FlyTo
+  flyTo: (center: [number, number, number], radius: number) => void;
+  clearFlyTo: () => void;
   triggerResetView: () => void;
   setInitialState: (s: { groupScale: number; groupPos: [number, number, number]; camPos: [number, number, number]; camTarget: [number, number, number] }) => void;
   reset: () => void;
@@ -78,6 +87,8 @@ const initialState = {
   autoColor: false,
   cameraMode: 'orthographic' as const,
   viewTarget: null as string | null,
+  screenshotTrigger: 0,
+  flyToBounds: null as { center: [number, number, number]; radius: number } | null,
   cameraQuat: [0, 0, 0, 1] as [number, number, number, number],
   resetViewTrigger: 0,
   initGroupScale: 1,
@@ -167,6 +178,9 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
   toggleAutoColor: () => set({ autoColor: !get().autoColor }),
   toggleCameraMode: () => set({ cameraMode: get().cameraMode === 'orthographic' ? 'perspective' : 'orthographic' }),
   setViewTarget: (view) => set({ viewTarget: view }),
+  triggerScreenshot: () => set({ screenshotTrigger: get().screenshotTrigger + 1 }),
+  flyTo: (center, radius) => set({ flyToBounds: { center, radius } }),
+  clearFlyTo: () => set({ flyToBounds: null }),
   triggerResetView: () => set({ resetViewTrigger: get().resetViewTrigger + 1 }),
   setInitialState: (s) => set({
     initGroupScale: s.groupScale,
@@ -182,5 +196,7 @@ export const useViewerStore = create<ViewerState>((set, get) => ({
       meshOwner: new Map(),
       expandedIds: new Set(),
       hiddenParts: new Set(),
+      flyToBounds: null,
+      screenshotTrigger: 0,
     }),
 }));

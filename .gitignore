@@ -30,8 +30,10 @@ docker/data/
 *.swp
 *.swo
 
-# Claude Code 个人本地设置（含权限模式，不入库）
+# Claude Code / OpenCode 个人本地设置（含权限模式，不入库）
 .claude/settings.local.json
+# Playwright MCP 生成的截图、快照、日志（临时产物，不入库）
+.playwright-mcp/
 
 # OS
 .DS_Store

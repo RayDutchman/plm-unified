@@ -386,3 +386,59 @@ def get_conversion_status(
         "startDate": conversion.start_date.isoformat() if conversion.start_date else None,
         "endDate": conversion.end_date.isoformat() if conversion.end_date else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# P3.2：追加额外 LOD Geometry 记录（quality=1, 2）
+# ---------------------------------------------------------------------------
+
+def add_geometry_record(
+    db: Session,
+    number: str,
+    version: str,
+    iteration_number: int,
+    workspace_id: uuid.UUID,
+    geometry_full_name: str,
+    x_min: Optional[float],
+    y_min: Optional[float],
+    z_min: Optional[float],
+    x_max: Optional[float],
+    y_max: Optional[float],
+    z_max: Optional[float],
+    quality: int,
+    content_length: int,
+) -> Geometry:
+    """
+    为指定迭代追加一条 Geometry 记录（用于 LOD1/LOD2）。
+    若该 quality 已有记录，先删除旧记录再写入。
+    不修改 Conversion 表状态（handle_conversion_callback 已处理 quality=0）。
+    """
+    iteration = _get_iteration(db, number, version, iteration_number, workspace_id)
+    now = _utcnow()
+
+    br = db.query(BinaryResource).filter_by(full_name=geometry_full_name).first()
+    if not br:
+        br = BinaryResource(
+            id=uuid.uuid4(),
+            full_name=geometry_full_name,
+            content_length=content_length,
+            last_modified=now,
+        )
+        db.add(br)
+        db.flush()
+
+    # 覆盖旧记录
+    db.query(Geometry).filter_by(iteration_id=iteration.id, quality=quality).delete()
+
+    geo = Geometry(
+        id=uuid.uuid4(),
+        iteration_id=iteration.id,
+        binary_resource_id=br.id,
+        quality=quality,
+        x_min=x_min, y_min=y_min, z_min=z_min,
+        x_max=x_max, y_max=y_max, z_max=z_max,
+    )
+    db.add(geo)
+    db.commit()
+    db.refresh(geo)
+    return geo

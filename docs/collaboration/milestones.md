@@ -245,8 +245,8 @@ feat(part-api): 实现签入签出状态机
 
 | # | 行动项 | 负责 | 串/并 | 状态 |
 |---|---|---|---|---|
-| 3.1 | 升级现有 3D 查看器 Three.js 到最新版（r168+），处理 breaking change，确保旧功能不退化 | A | 串行起点（可与 M2 末期并行提前开始） | ⬜ |
-| 3.2 | 将升级后的 3D 查看器部署为独立静态服务（新增 `viewer` nginx 容器） | A | → 3.1 | ⬜ |
+| 3.1 | **以 myPDM STPViewer（已是 R184 + React 18 + TypeScript）为基础**，完成查看器能力建设，分五个 Phase 推进（详见下方展开）：**Phase 1** 渲染质量对齐（深色背景、抗锯齿、边线轮廓、IBL 强度）；**Phase 2** 补全 DocDoku 易补功能（截图下载、FlyTo 飞向选中件）；**Phase 3** 多精度 LOD + 按需加载（conversion service 生成三精度 GLB，backend 存三条 Geometry，前端 GeometryWorker + LODController）；**Phase 4** 装配体实例矩阵渲染（instances API + applyMatrix4，BOM 树适配，核心合并功能）；**Phase 5** 独立静态服务（/viewer 路由 + nginx 容器 + 零件详情 iframe 嵌入） | A | 串行起点，各 Phase 内部可并行 | ⬜ |
+| 3.2 | ~~将升级后的 3D 查看器部署为独立静态服务~~（**已合并入 3.1 Phase 5**） | — | → 3.1 | 🔁（并入 3.1） |
 | 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 | ⬜ |
 | 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 | 🟡（UI 已就绪，数据仍走 mock） |
 | 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 | ⬜ |
@@ -255,6 +255,34 @@ feat(part-api): 实现签入签出状态机
 | 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 | ⬜ |
 
 **✅ M3 达成条件**：验收测试全部通过——用户完全通过 React 前端完成零件创建、BOM 查看、3D 预览，Backbone.js 前端不再需要，旧 `front` 容器已下线。
+
+#### 3.1 详细展开
+
+**策略**：不升级 DocDoku R90 查看器（Backbone.js + RequireJS + `THREE.Geometry` 全废弃 API，升级等于重写 6300 行）；以 myPDM STPViewer（R184 + React 18 + TypeScript，~1700 行）为基础，按需补全 DocDoku 有价值的功能。
+
+| Phase | 子项 | 改动位置 | 具体内容 | 依赖 |
+|---|---|---|---|---|
+| **P1 渲染质量** | 1.1 深色背景 | `ViewerCanvas.tsx` | `scene.background = new Color('#2a2a2e')` | 无 |
+| | 1.2 开抗锯齿 | `ViewerCanvas.tsx` gl 配置 | `antialias: true`（当前两个查看器都未开） | 无 |
+| | 1.3 边线轮廓 | `ModelLoader.tsx` | 每个 Mesh 附加 `EdgesGeometry + Line2`，颜色 `#222222`，Line2 支持真实像素宽度 | 无 |
+| | 1.4 调整 IBL 强度 | `ViewerCanvas.tsx` | RoomEnvironment 0.8→1.0，环境光 0.25→0.35 | 无 |
+| **P2 补功能** | 2.1 截图下载 | `Toolbar.tsx` | 工具栏加相机图标，`canvas.toDataURL('image/png')` → `<a>` 下载，文件名含零件号+时间戳 | P1 |
+| | 2.2 FlyTo 飞向选中件 | `CameraController.tsx` | 计算选中 Mesh 的 bounding sphere，0.4s 动画飞过去；ArcballControls 的 focus() 方法可直接用 | P1 |
+| **P3 LOD 按需加载** | 3.1 conversion service：三精度 GLB | `convert_step_glb.py` + `StepFileConverterImpl.java` | Python 脚本三次调用 `BRepMesh_IncrementalMesh`（deflection 0.02/0.05/0.15），输出 `{uuid}100.glb` / `{uuid}60.glb` / `{uuid}20.glb`；Java 端传 `--lod true` 参数，将三路径写入 `convertedFileLODs{0,1,2}` | 无 |
+| | 3.2 backend：三条 Geometry 记录 | `conversion_compat.py` | 回调处理循环 `convertedFileLODs` 全部 key，每个 GLB 写一条 Geometry（quality=0/1/2） | 3.1 |
+| | 3.3 backend：geometry endpoint | `backend/app/routers/iterations.py` | `GET /api/parts/{num}/{ver}/iterations/{iter}/geometry?quality=0&workspace_id=...` → `StreamingResponse`（GLB 文件流） | 3.2 |
+| | 3.4 前端：Web Worker + LOD 调度 | 新增 `GeometryWorker.ts` + `LODController.tsx` | Worker 每 100ms 接收相机 context，计算投影大小评分（projSize = radius/dist），输出 directives；LODController 按 quality 变化触发 GLTFLoader 重新加载；阈值：projSize>200→LOD0，50-200→LOD1，5-50→LOD2，<5→不加载 | 3.3 |
+| **P4 装配体矩阵** | 4.1 装配体查看器入口 | `index.tsx` | 新增 `mode: 'part' \| 'assembly'` props；assembly 模式跳过 conversion 轮询，直接请求 instances API | P3 |
+| | 4.2 实例矩阵加载 | `ModelLoader.tsx` | assembly 模式：请求 `GET /api/parts/{num}/{ver}/instances`，对每个实例 fetch LOD0 GLB → `object3d.applyMatrix4(new Matrix4().fromArray(globalMatrix))` → 加入场景 | 4.1 |
+| | 4.3 BOM 树适配 | `buildModelTree.ts` | assembly 模式改为从 instances API 的 component 层级构建 TreeNode，叶节点绑定实例 meshUuid | 4.2 |
+| | 4.4 LOD Worker 适配 | `GeometryWorker.ts` | 注册实例时附带世界坐标包围球（bbox + matrix 变换），Worker 用世界空间距离评分 | 4.3 + 3.4 |
+| **P5 独立服务** | 5.1 独立 /viewer 路由 | `frontend/src/pages/ViewerPage.tsx`（新建） | 接受 URL 参数 `?partNumber=X&version=A&iteration=1&workspaceId=...&token=JWT&mode=part\|assembly`，渲染 STPViewer | P4 |
+| | 5.2 nginx 容器 | `docker/docker-compose.yml` | 新增 `viewer` service，serve `frontend/dist`，宿主机 8020 端口 | 5.1 |
+| | 5.3 零件详情页嵌入 | `PartMasters.tsx` | 详情页加 `<iframe src="http://localhost:8020/viewer?...&token=JWT">` | 5.2 |
+
+**执行依赖**：P1 → P2 → P5；P3.1 → P3.2 → P3.3 → P3.4 → P4 → P5（P1/P2 与 P3 可并行）
+
+
 
 ---
 
