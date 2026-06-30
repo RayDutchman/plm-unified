@@ -41,7 +41,7 @@ export default function ComponentAttachmentBucket({ componentId, category, label
 
   const uploadLarge = async (file: File) => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const init = await v2UploadApi.initChunkedUpload(file.name, file.size, 'components', componentId, category);
+    const init = await v2UploadApi.initChunkedUpload(file.name, file.size, 'part', componentId, category);
     for (let i = 0; i < totalChunks; i++) {
       const start = i * CHUNK_SIZE;
       await v2UploadApi.uploadChunk(init.upload_id, i, file.slice(start, Math.min(start + CHUNK_SIZE, file.size)));
@@ -61,7 +61,7 @@ export default function ComponentAttachmentBucket({ componentId, category, label
       if (file.size > CHUNK_THRESHOLD) {
         await uploadLarge(file);
       } else {
-        await v2UploadApi.uploadSmallFile(file, 'components', componentId, (p) => setProgress(p), category);
+        await v2UploadApi.uploadSmallFile(file, 'part', componentId, (p) => setProgress(p), category);
       }
       await load();
     } catch {
