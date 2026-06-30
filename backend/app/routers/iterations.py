@@ -22,7 +22,9 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, File, Query, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+from app.schemas.part import _to_camel
 from sqlalchemy.orm import Session
 
 from app.crud.assembly import compute_instances, write_components
@@ -215,7 +217,9 @@ async def upload_native_cad(
 # ---------------------------------------------------------------------------
 
 class ConversionCallbackBody(BaseModel):
-    """conversion 服务回调请求体。"""
+    """conversion 服务回调请求体。同时接受 camelCase 和 snake_case 字段名。"""
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
     succeed: bool
     geometry_full_name: Optional[str] = None
     x_min: Optional[float] = None
