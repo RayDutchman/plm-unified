@@ -15,8 +15,10 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# glb 缓存目录（容器内路径，对应宿主机 uploads/glb_cache/）
-GLTF_CACHE_DIR = Path("/app/uploads/glb_cache")
+from app.core.config import settings
+
+# glb 缓存目录（对应宿主机 uploads/glb_cache/）
+GLTF_CACHE_DIR = Path(settings.uploads_path) / "glb_cache"
 
 # 转换脚本路径
 CONVERTER_SCRIPT = "/app/app/stp_to_gltf.py"

@@ -138,7 +138,7 @@ async def get_values_batch(
 @router.get("/values/{entity_type}/{entity_id}", response_model=list[schemas.CustomFieldValueResponse])
 async def get_values(
     entity_type: str,
-    entity_id: uuid.UUID,
+    entity_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("custom_field.value:read"))
 ):
@@ -151,7 +151,7 @@ async def get_values(
 @router.put("/values/{entity_type}/{entity_id}")
 async def set_values(
     entity_type: str,
-    entity_id: uuid.UUID,
+    entity_id: str,
     batch: schemas.CustomFieldValuesBatch,
     request: Request,
     db: Session = Depends(get_db),

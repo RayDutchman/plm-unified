@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 # Mayo CLI 可执行文件路径（Docker 内）
 MAYO_CONV = os.environ.get("MAYO_CONV_PATH", "/usr/local/bin/MayoConv")
 
-# Docker 无 FUSE，AppImage 需解压运行
-MAYO_PREFIX = [MAYO_CONV, "--appimage-extract-and-run"]
+# AppImage 已提取到 /opt/mayo，无需 --appimage-extract-and-run
+MAYO_PREFIX = [MAYO_CONV]
 
 # Mayo 配置文件模板目录
 MAYO_SETTINGS_DIR = Path("/app/mayo_settings")
@@ -64,7 +64,7 @@ def _ensure_settings(quality: str) -> str:
         # 使用临时空输出生成默认配置
         try:
             subprocess.run(
-                ["xvfb-run", "--auto-servernum"] + MAYO_PREFIX +
+                ["env", "QT_QPA_PLATFORM=offscreen"] + MAYO_PREFIX +
                 ["--write-settings-cache", str(settings_path)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -116,7 +116,7 @@ def convert(input_path: str, output_path: str):
 
     # Step 3: 调用 Mayo CLI
     cmd = [
-        "xvfb-run", "--auto-servernum",
+        "env", "QT_QPA_PLATFORM=offscreen",
     ] + MAYO_PREFIX + [
         "--use-settings", settings_path,
         input_path,

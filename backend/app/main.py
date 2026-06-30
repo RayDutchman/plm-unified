@@ -38,7 +38,7 @@ app.include_router(user_groups_router, prefix="/api")
 from app.routers.documents import router as documents_router
 app.include_router(documents_router, prefix="/api")
 from app.routers.attachments_v2 import router as attachments_router
-app.include_router(attachments_router, prefix="/api")
+app.include_router(attachments_router, prefix="/api/v2")
 
 # Phase 2: 关系层
 from app.routers.bom import router as bom_router
@@ -67,8 +67,8 @@ from app.routers.logs import router as logs_router
 app.include_router(logs_router, prefix="/api")
 from app.routers.admin import router as admin_router
 app.include_router(admin_router, prefix="/api")
-# from app.routers.sync import router as sync_router
-# app.include_router(sync_router, prefix="/api")
+from app.routers.sync import router as sync_router
+app.include_router(sync_router, prefix="/api")
 
 
 @app.get("/health", tags=["系统"])
