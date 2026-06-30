@@ -172,13 +172,11 @@ def set_custom_field_values(db: Session, entity_type, entity_id, values):
 def assert_entity_editable(db: Session, entity_type: str, entity_id, user_role: str):
     if user_role == "admin":
         return
-    if entity_type != "component":
-        return
-    from app.models.pdm import Component
+    from app.models.part import PartMaster, PartRevision
     from fastapi import HTTPException
-    ent = db.query(Component).filter(Component.id == entity_id).first()
-    if ent and ent.status in ("frozen", "released"):
-        label = "已冻结" if ent.status == "frozen" else "已发布"
+    revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
+    if revision and revision.status in ("OBSOLETE", "RELEASED"):
+        label = "已冻结" if revision.status == "OBSOLETE" else "已发布"
         raise HTTPException(status_code=403, detail=f"该零部件{label}，审批/发布期间不可修改（仅管理员可修改）")
 
 

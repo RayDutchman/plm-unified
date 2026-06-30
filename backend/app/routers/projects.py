@@ -397,7 +397,7 @@ def _task_dict(db, t):
             "sort_order": t.sort_order, "description": t.description}
 
 
-_ENTITY_TABLE = {"part": "components", "assembly": "components", "component": "components", "document": "documents", "config_item": "configuration_items"}
+_ENTITY_TABLE = {"part": "part_masters", "assembly": "part_masters", "component": "part_masters", "document": "documents", "config_item": "configuration_items"}
 
 
 def _link_dict(db, l):

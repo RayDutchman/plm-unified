@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from datetime import datetime, timezone
 
 from app.models.models_eco import ECO, ECOExecutionItem, ECOReviewRecord, ECOStatusLog
-from app.models import User, Component, PartMaster, PartRevision
+from app.models import User, PartMaster, PartRevision
 from app.schemas.eco import ECOCreate, ECOUpdate, ECOListParams, ECOExecutionItemCreate, ECOExecutionItemEdit
 
 _ALLOWED_TRANSITIONS = {
@@ -66,17 +66,11 @@ def _build_reviewers_json(db: Session, reviewer_items: list) -> list:
 
 def _lookup_entity(db: Session, entity_type: str, entity_id: uuid.UUID):
     code, name, version = "", "", ""
-    if entity_type in ("part",):
+    if entity_type in ("part", "component", "assembly"):
         entity = db.query(PartMaster).filter(PartMaster.id == entity_id).first()
         if entity:
             code = entity.number or ""
             name = entity.name or ""
-    elif entity_type in ("component", "assembly"):
-        entity = db.query(Component).filter(Component.id == entity_id).first()
-        if entity:
-            code = entity.code or ""
-            name = entity.name or ""
-            version = entity.version or ""
     return code, name, version
 
 
@@ -438,86 +432,45 @@ def get_status_logs(db: Session, eco_id: uuid.UUID) -> list:
 
 
 def _upgrade_entity(db: Session, entity_type: str, entity_id: uuid.UUID) -> tuple:
-    """升版实体：对 PartMaster 创建新 PartRevision，对 Component 克隆新版本"""
-    if entity_type == "part":
-        master = db.query(PartMaster).filter(PartMaster.id == entity_id).first()
-        if not master:
-            raise HTTPException(status_code=404, detail=f"PartMaster {entity_id} 不存在")
-        revisions = db.query(PartRevision).filter(
-            PartRevision.part_master_id == entity_id
-        ).order_by(PartRevision.created_at.desc()).all()
-        latest_version = revisions[0].version if revisions else "A"
-        next_v = _next_version_str(latest_version)
-        new_rev = PartRevision(
-            part_master_id=entity_id,
-            version=next_v,
-            status="WIP",
-        )
-        db.add(new_rev)
-        db.flush()
-        return new_rev.id, next_v
-    else:
-        entity = db.query(Component).filter(Component.id == entity_id).first()
-        if not entity:
-            raise HTTPException(status_code=404, detail=f"Component {entity_id} 不存在")
-        new_version = _next_version_str(entity.version or "A")
-        new_entity = Component(
-            code=entity.code,
-            name=entity.name,
-            spec=entity.spec,
-            version=new_version,
-            status="draft",
-            remark=entity.remark,
-            revisions=list(entity.revisions or []),
-            revision_parent_id=entity.id,
-            document_links=[],
-        )
-        db.add(new_entity)
-        db.flush()
-        return new_entity.id, new_version
+    master = db.query(PartMaster).filter(PartMaster.id == entity_id).first()
+    if not master:
+        raise HTTPException(status_code=404, detail=f"PartMaster {entity_id} 不存在")
+    revisions = db.query(PartRevision).filter(
+        PartRevision.part_master_id == entity_id
+    ).order_by(PartRevision.created_at.desc()).all()
+    latest_version = revisions[0].version if revisions else "A"
+    next_v = _next_version_str(latest_version)
+    new_rev = PartRevision(
+        part_master_id=entity_id,
+        version=next_v,
+        status="WIP",
+    )
+    db.add(new_rev)
+    db.flush()
+    return new_rev.id, next_v
 
 
 def _release_entity(db: Session, entity_type: str, entity_id: uuid.UUID):
-    """发布实体"""
-    if entity_type == "part":
-        revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
-        if not revision:
-            raise HTTPException(status_code=404, detail=f"PartRevision {entity_id} 不存在")
-        revision.status = "RELEASED"
-        revision.released_at = datetime.now(timezone.utc)
-    else:
-        entity = db.query(Component).filter(Component.id == entity_id).first()
-        if not entity:
-            raise HTTPException(status_code=404, detail=f"Component {entity_id} 不存在")
-        entity.status = "released"
+    revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
+    if not revision:
+        raise HTTPException(status_code=404, detail=f"PartRevision {entity_id} 不存在")
+    revision.status = "RELEASED"
+    revision.released_at = datetime.now(timezone.utc)
 
 
 def _freeze_entity(db: Session, entity_type: str, entity_id: uuid.UUID):
-    """冻结实体"""
-    if entity_type == "part":
-        revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
-        if not revision:
-            raise HTTPException(status_code=404, detail=f"PartRevision {entity_id} 不存在")
-        revision.status = "OBSOLETE"
-        revision.obsoleted_at = datetime.now(timezone.utc)
-    else:
-        entity = db.query(Component).filter(Component.id == entity_id).first()
-        if not entity:
-            raise HTTPException(status_code=404, detail=f"Component {entity_id} 不存在")
-        entity.status = "frozen"
+    revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
+    if not revision:
+        raise HTTPException(status_code=404, detail=f"PartRevision {entity_id} 不存在")
+    revision.status = "OBSOLETE"
+    revision.obsoleted_at = datetime.now(timezone.utc)
 
 
 def _revert_entity(db: Session, entity_type: str, entity_id: uuid.UUID):
-    if entity_type == "part":
-        revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
-        if not revision:
-            raise HTTPException(status_code=404, detail=f"PartRevision {entity_id} 不存在")
-        revision.status = "WIP"
-    else:
-        entity = db.query(Component).filter(Component.id == entity_id).first()
-        if not entity:
-            raise HTTPException(status_code=404, detail=f"Component {entity_id} 不存在")
-        entity.status = "draft"
+    revision = db.query(PartRevision).filter(PartRevision.id == entity_id).first()
+    if not revision:
+        raise HTTPException(status_code=404, detail=f"PartRevision {entity_id} 不存在")
+    revision.status = "WIP"
 
 
 VERSION_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

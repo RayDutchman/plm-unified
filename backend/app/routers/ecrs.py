@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User, Component, PartMaster
+from app.models import User, PartMaster
 from app.models.models_ecr import ECR as ECRModel, ECRReviewRecord, ECRStatusLog, ECRAffectedItem
 from app.routers.auth import get_current_active_user
 from app.schemas.ecr import (
@@ -435,10 +435,7 @@ async def get_bom_trace(
     if entity_type not in ("part", "assembly"):
         raise HTTPException(status_code=400, detail="仅支持 part 或 assembly")
 
-    if entity_type == "part":
-        obj = db.query(PartMaster).filter(PartMaster.id == entity_id).first()
-    else:
-        obj = db.query(Component).filter(Component.id == entity_id).first()
+    obj = db.query(PartMaster).filter(PartMaster.id == entity_id).first()
     if not obj:
         raise HTTPException(status_code=404, detail="实体不存在")
 

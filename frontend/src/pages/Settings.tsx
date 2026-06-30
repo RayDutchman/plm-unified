@@ -29,7 +29,7 @@ function displayAppliesTo(applies_to: string[]): string[] {
 
 // 编辑时，将归一化的标签列表转回 checkbox 选中值（旧数据可能有 'component' 兼容处理）
 function expandAppliesTo(applies_to: string[]): string[] {
-  const normalized = applies_to.includes('part') || applies_to.includes('component') ? ['part'] : [];
+  const normalized = applies_to.includes('part') || applies_to.includes('assembly') || applies_to.includes('component') ? ['part'] : [];
   if (applies_to.includes('document')) normalized.push('document');
   return normalized;
 }

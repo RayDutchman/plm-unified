@@ -124,8 +124,8 @@ async def get_values_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("custom_field.value:read"))
 ):
-    if type not in ('part', 'component', 'document'):
-        raise HTTPException(status_code=400, detail="type 必须为 part、component 或 document")
+    if type not in ('part', 'component', 'assembly', 'document'):
+        raise HTTPException(status_code=400, detail="type 必须为 part、component/assembly 或 document")
 
     entity_ids = [id.strip() for id in ids.split(',') if id.strip()]
     if not entity_ids:

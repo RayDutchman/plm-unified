@@ -5,7 +5,7 @@ from app.models.binary import BinaryResource, Geometry, Conversion
 from app.models.assembly import PartUsageLink, CADInstance
 from app.models.user_groups import UserGroup, user_group_members
 from app.models.models_document import Document, DocumentAttachment, DocumentLink, DocumentGroupLink
-from app.models.pdm import Component, ComponentAttachment
+from app.models.pdm import ComponentAttachment
 from app.models.models_ecr import ECR, ECRAffectedItem, ECRReviewRecord, ECRStatusLog
 from app.models.models_eco import ECO, ECOExecutionItem, ECOReviewRecord as ECOReview, ECOStatusLog as ECOStatus
 from app.models.models_inventory import (
@@ -33,7 +33,7 @@ __all__ = [
     "PartUsageLink", "CADInstance",
     "UserGroup", "user_group_members",
     "Document", "DocumentAttachment", "DocumentLink", "DocumentGroupLink",
-    "Component", "ComponentAttachment",
+    "ComponentAttachment",
     "ECR", "ECRAffectedItem", "ECRReviewRecord", "ECRStatusLog",
     "ECO", "ECOExecutionItem", "ECOReview", "ECOStatus",
     "Warehouse", "InventoryMaterial", "InventoryStock", "InventoryLedger",

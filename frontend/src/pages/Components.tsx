@@ -249,7 +249,7 @@ export default function Components() {
   const { sortedData, handleSort, getSortIcon } = useTableSort<Assembly>(assemblies, 'code', 'asc');
 
   // 获取部件适用的自定义字段定义
-  const componentCustomDefs = customFieldDefs.filter((d) => d.applies_to?.includes('part'));
+    const componentCustomDefs = customFieldDefs.filter((d) => d.applies_to?.includes('part') || d.applies_to?.includes('assembly'));
 
   // 筛选逻辑
   const filteredData = sortedData.filter(assembly => {
@@ -354,7 +354,7 @@ export default function Components() {
     if (assembliesList.length === 0) return;
     try {
       const results = await Promise.allSettled(
-        assembliesList.map(asm => customFieldsApi.getValues('component', asm.id))
+        assembliesList.map(asm => customFieldsApi.getValues('assembly', asm.id))
       );
       const map: Record<string, Record<string, unknown>> = {};
       results.forEach((result, index) => {
@@ -380,7 +380,7 @@ export default function Components() {
 
   const loadCustomFieldValues = async (assemblyId: string, isView = false) => {
     try {
-      const response = await customFieldsApi.getValues('component', assemblyId);
+      const response = await customFieldsApi.getValues('assembly', assemblyId);
       const values: Record<string, unknown> = {};
       (response.data || []).forEach((v: CustomFieldValue) => {
         values[v.field_id] = v.value;
@@ -675,7 +675,7 @@ export default function Components() {
         .filter((fv) => fv.value !== null && fv.value !== '');
 
       if (fieldValues.length > 0) {
-        await customFieldsApi.setValues('component', newAssembly!.id, fieldValues);
+        await customFieldsApi.setValues('assembly', newAssembly!.id, fieldValues);
       }
 
       setModalOpen(false);
@@ -760,7 +760,7 @@ export default function Components() {
       if (reqId !== nestedReqId.current) return; // 忽略过期请求
       setNestedData(res.data);
       const allDefs = useDataStore.getState().customFieldDefs;
-      const entityType = type === 'part' ? 'part' : 'component';
+      const entityType = type === 'part' ? 'part' : 'assembly';
       const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes(entityType));
       setNestedCustomDefs(defs);
       if (defs.length > 0) {
@@ -1344,7 +1344,7 @@ export default function Components() {
 
           {/* 关联图文档（仅编辑已有部件时显示） */}
           {editingAssembly && (
-            <EntityDocumentSection entityType="component" entityId={editingAssembly.id} entityCode={editingAssembly.code} entityName={editingAssembly.name} editable />
+            <EntityDocumentSection entityType="assembly" entityId={editingAssembly.id} entityCode={editingAssembly.code} entityName={editingAssembly.name} editable />
           )}
 
           {/* CAD附件 / 生产附件（仅编辑已有部件时显示） */}
@@ -1494,7 +1494,7 @@ export default function Components() {
                     : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
-                基础信息
+                基础信息(V2)
               </button>
 
               <button
@@ -1607,7 +1607,7 @@ export default function Components() {
 
             {detailTab === 'docs' && (
               <EntityDocumentSection
-                entityType="component"
+                entityType="assembly"
                 entityId={viewingAssembly.id}
                 entityCode={viewingAssembly.code}
                 entityName={viewingAssembly.name}

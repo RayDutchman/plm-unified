@@ -4,6 +4,7 @@ from sqlalchemy import (
     Column, String, Text, Integer, Boolean, Uuid, ForeignKey, DateTime,
     UniqueConstraint, CheckConstraint, Index, func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from app.database import Base
 from app.models.mixins import TimestampMixin, SoftDeleteMixin
 
@@ -24,6 +25,7 @@ class PartMaster(Base, TimestampMixin, SoftDeleteMixin):
     type = Column(String(50), nullable=True)
     standard_part = Column(Boolean, nullable=False, default=False)
     author_id = Column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    document_links = Column(JSONB, default=[])
 
 
 class PartRevision(Base, TimestampMixin, SoftDeleteMixin):

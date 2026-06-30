@@ -219,7 +219,7 @@ export function ECOCreateModal({ open, onClose, onCreated, ecrId, ecrTitle, ecrI
       setNestedData(r.data);
       // 加载自定义字段
       try {
-        const cfType = entityType === 'assembly' ? 'component' : entityType;
+        const cfType = entityType === 'assembly' ? 'assembly' : entityType;
         const allDefs = useDataStore.getState().customFieldDefs || [];
         const defs = allDefs.filter((d: any) => d.applies_to?.includes(cfType));
         const valsRes = await customFieldsApi.getValues(cfType, entityId);
