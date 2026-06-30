@@ -141,6 +141,23 @@ function InstanceMesh({ instance, buffer, selected, onSelect }: InstanceMeshProp
     onSelect(instance.id);
   };
 
+  if (!scene && !instance.geometryFullName) {
+    // 无几何数据的实例 → 渲染占位球体
+    const bboxCenter = new THREE.Vector3(
+      (instance.xMin + instance.xMax) / 2,
+      (instance.yMin + instance.yMax) / 2,
+      (instance.zMin + instance.zMax) / 2,
+    );
+    return (
+      <group matrix={instanceMatrix} matrixAutoUpdate={false}>
+        <mesh position={bboxCenter} onPointerDown={handlePointerDown} onClick={handleClick}>
+          <sphereGeometry args={[3, 8, 6]} />
+          <meshStandardMaterial color={0x888888} roughness={0.8} metalness={0.1} />
+        </mesh>
+      </group>
+    );
+  }
+
   if (!scene) return null;
 
   return (
