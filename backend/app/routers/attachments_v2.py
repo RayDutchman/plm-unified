@@ -125,10 +125,13 @@ async def upload_file(
             if doc:
                 folder_name = f"{doc.code}_{doc.version}"
         elif entity_type in ("component", "components", "part", "parts", "assembly", "assemblies"):
-            from app.models.part import PartMaster
+            from app.models.part import PartMaster, PartRevision
             pm = db.query(PartMaster).filter(PartMaster.id == uuid.UUID(entity_id)).first()
             if pm:
-                folder_name = f"{pm.number}_A"
+                rev = db.query(PartRevision).filter(
+                    PartRevision.part_master_id == pm.id, PartRevision.deleted_at.is_(None)
+                ).order_by(PartRevision.version.desc()).first()
+                folder_name = f"{pm.number}_{rev.version}" if rev else f"{pm.number}_A"
         result = file_storage.save_file(
             file_data,
             entity_type,
@@ -138,7 +141,7 @@ async def upload_file(
         )
 
         # 零部件附件：写入独立表 part_attachments
-        if entity_type in ("component", "components"):
+        if entity_type in ("component", "components", "part", "parts", "assembly", "assemblies"):
             from ..models import PartAttachment
             catt_id = uuid.uuid4()
             new_catt = PartAttachment(
@@ -241,7 +244,7 @@ async def init_chunked_upload(
             from app.models.part import PartMaster
             pm = db.query(PartMaster).filter(PartMaster.id == uuid.UUID(entity_id)).first()
             if pm:
-                folder_name = f"{pm.number}_A"
+                folder_name = f"{pm.number}"
         meta = chunked_uploader.init_upload(
             filename,
             file_size,

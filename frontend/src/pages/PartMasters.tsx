@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { partMasterApi, type PartMasterListItem, type PartMasterDetail } from '../services/partMasterApi';
-import { customFieldsApi } from '../services/api';
+import { customFieldsApi, assemblyPartsApi } from '../services/api';
 import type { CustomFieldDefinition, CustomFieldValue } from '../types';
 import { useDataStore } from '../stores/data';
 import { Modal, ConfirmModal } from '../components/Modal';
 import EntityDocumentSection from '../components/EntityDocumentSection';
 import PartAttachmentBucket from '../components/PartAttachmentBucket';
+import AssemblyPartPicker from '../components/AssemblyPartPicker';
+import BOMTreeTable from '../components/BOMTreeTable';
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   WIP: { label: '草稿', cls: 'bg-blue-100 text-blue-800' },
@@ -52,7 +54,11 @@ export default function PartMasters() {
 
   const [editCustomFieldDefs, setEditCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
   const [editCustomFieldValues, setEditCustomFieldValues] = useState<Record<string, unknown>>({});
-  const [editTab, setEditTab] = useState<'basic' | 'docs' | 'cad' | 'production'>('basic');
+  const [editTab, setEditTab] = useState<'basic' | 'docs' | 'cad' | 'production' | 'bom'>('basic');
+
+  const [editParts, setEditParts] = useState<any[]>([]);
+  const [loadingEditParts, setLoadingEditParts] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const componentCustomDefs = useMemo(() => {
     const allDefs = useDataStore.getState().customFieldDefs;
@@ -196,6 +202,8 @@ export default function PartMasters() {
       (valuesRes.data || []).forEach((v: CustomFieldValue) => { vals[v.field_id] = v.value; });
       setEditCustomFieldValues(vals);
     } catch { setEditCustomFieldValues({}); }
+    setLoadingEditParts(true);
+    try { const r = await assemblyPartsApi.list(it.id); setEditParts(r.data || []); } catch { setEditParts([]); } finally { setLoadingEditParts(false); }
     setModalOpen(true);
   };
 
@@ -412,77 +420,141 @@ export default function PartMasters() {
       {/* 新增/编辑弹窗 */}
       <Modal open={modalOpen} title={editing ? '编辑零部件' : '新增零部件'} onClose={() => setModalOpen(false)} width="full">
         {editing ? (
-          <div>
-            <div className="flex gap-1 mb-4 border-b flex-wrap">
+          <div className="flex flex-col" style={{ maxHeight: 'calc(85vh - 80px)' }}>
+            <div className="flex gap-1 mb-2 border-b flex-wrap shrink-0">
               <TabBtn active={editTab === 'basic'} onClick={() => setEditTab('basic')}>基本信息</TabBtn>
               <TabBtn active={editTab === 'docs'} onClick={() => setEditTab('docs')}>关联图文档</TabBtn>
               <TabBtn active={editTab === 'cad'} onClick={() => setEditTab('cad')}>CAD附件</TabBtn>
               <TabBtn active={editTab === 'production'} onClick={() => setEditTab('production')}>生产附件</TabBtn>
+              <TabBtn active={editTab === 'bom'} onClick={() => setEditTab('bom')}>子项清单</TabBtn>
             </div>
 
-            {editTab === 'basic' && (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                    <label className="block text-xs text-gray-500 mb-0.5">编号</label>
-                    <input type="text" value={formData.number} disabled className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400" />
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                    <label className="block text-xs text-gray-500 mb-0.5">名称 <span className="text-red-500">*</span></label>
-                    <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500" required />
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                    <label className="block text-xs text-gray-500 mb-0.5">类型</label>
-                    <input type="text" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500" />
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                    <label className="block text-xs text-gray-500 mb-0.5">版本</label>
-                    <input type="text" value={formData.version} disabled className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400" />
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center gap-2">
-                    <label className="flex items-center gap-1.5 text-sm cursor-pointer">
-                      <input type="checkbox" checked={formData.standard_part} onChange={(e) => setFormData({ ...formData, standard_part: e.target.checked })} className="w-3.5 h-3.5" />
-                      标准件
-                    </label>
-                  </div>
-                </div>
-
-                {editCustomFieldDefs.length > 0 && (
-                  <div className="border-t pt-4">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {editCustomFieldDefs.map(def => (
-                        <div key={def.id} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                          <label className="block text-xs text-gray-500 mb-0.5">{def.name}</label>
-                          {renderCustomFieldInput(def)}
-                        </div>
-                      ))}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {editTab === 'basic' && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                      <label className="block text-xs text-gray-500 mb-0.5">编号</label>
+                      <input type="text" value={formData.number} disabled className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400" />
+                    </div>
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                      <label className="block text-xs text-gray-500 mb-0.5">名称 <span className="text-red-500">*</span></label>
+                      <input type="text" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                    </div>
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                      <label className="block text-xs text-gray-500 mb-0.5">类型</label>
+                      <input type="text" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                    </div>
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                      <label className="block text-xs text-gray-500 mb-0.5">版本</label>
+                      <input type="text" value={formData.version} disabled className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400" />
+                    </div>
+                    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                        <input type="checkbox" checked={formData.standard_part} onChange={(e) => setFormData({ ...formData, standard_part: e.target.checked })} className="w-3.5 h-3.5" />
+                        标准件
+                      </label>
                     </div>
                   </div>
-                )}
 
-                {saveError && (
-                  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">{saveError}</div>
-                )}
-
-                <div className="flex justify-end gap-2 pt-4 border-t">
-                  <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
-                  <button type="submit" disabled={saving} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+                  {editCustomFieldDefs.length > 0 && (
+                    <div className="border-t pt-4">
+                      <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {editCustomFieldDefs.map(def => (
+                          <div key={def.id} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                            <label className="block text-xs text-gray-500 mb-0.5">{def.name}</label>
+                            {renderCustomFieldInput(def)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </form>
-            )}
+              )}
 
-            {editTab === 'docs' && (
-              <EntityDocumentSection entityType="assembly" entityId={editing.id} entityCode={editing.number} entityName={editing.name} editable />
-            )}
+              {editTab === 'docs' && (
+                <EntityDocumentSection entityType="assembly" entityId={editing.id} entityCode={editing.number} entityName={editing.name} editable />
+              )}
 
-            {editTab === 'cad' && (
-              <PartAttachmentBucket partId={editing.id} category="cad" label="CAD附件" editable />
-            )}
+              {editTab === 'cad' && (
+                <PartAttachmentBucket partId={editing.id} category="cad" label="CAD附件" editable />
+              )}
 
-            {editTab === 'production' && (
-              <PartAttachmentBucket partId={editing.id} category="production" label="生产附件" editable />
+              {editTab === 'production' && (
+                <PartAttachmentBucket partId={editing.id} category="production" label="生产附件" editable />
+              )}
+
+              {editTab === 'bom' && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-bold text-gray-700">子项清单 ({editParts.length})</h4>
+                    <button type="button" onClick={() => setPickerOpen(true)} className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700">+ 添加子项</button>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden">
+                    {loadingEditParts ? (
+                      <div className="px-4 py-6 text-center text-sm text-gray-400">加载中...</div>
+                    ) : editParts.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-sm text-gray-400">暂无子项</div>
+                    ) : (
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-gray-500 font-medium">件号</th>
+                            <th className="px-3 py-2 text-left text-gray-500 font-medium">名称</th>
+                            <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">版本</th>
+                            <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">状态</th>
+                            <th className="px-3 py-2 text-right text-gray-500 font-medium w-20">用量</th>
+                            <th className="px-3 py-2 text-center text-gray-500 font-medium w-16">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {editParts.map((p: any) => (
+                            <tr key={p.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 font-medium">{p.child_detail?.code || '-'}</td>
+                              <td className="px-3 py-2">{p.child_detail?.name || '-'}</td>
+                              <td className="px-3 py-2 text-gray-500">{p.child_detail?.version || '-'}</td>
+                              <td className="px-3 py-2">
+                                <span className={`px-1.5 py-0.5 text-xs rounded-full ${statusTag(p.child_detail?.status || 'WIP').cls}`}>
+                                  {statusTag(p.child_detail?.status || 'WIP').label}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right">{p.quantity}</td>
+                              <td className="px-3 py-2 text-center">
+                                <button type="button" onClick={async () => { try { await assemblyPartsApi.remove(editing.id, p.id); const r = await assemblyPartsApi.list(editing.id); setEditParts(r.data || []); } catch { alert('移除失败'); } }} className="text-red-500 hover:text-red-700 text-xs">移除</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+
+                  <AssemblyPartPicker
+                    open={pickerOpen}
+                    onClose={() => setPickerOpen(false)}
+                    onConfirm={async (items) => {
+                      try {
+                        await Promise.all(items.map((it: any) => assemblyPartsApi.add(editing.id, { child_type: it.child_type, child_id: it.child_id, quantity: it.quantity || 1 })));
+                        const r = await assemblyPartsApi.list(editing.id);
+                        setEditParts(r.data || []);
+                        setPickerOpen(false);
+                      } catch { alert('添加子项失败'); }
+                    }}
+                    existingChildIds={new Set(editParts.map((p: any) => p.child_id))}
+                    currentAssemblyId={editing.id}
+                  />
+                </div>
+              )}
+            </div>
+
+            {saveError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm shrink-0 mt-2">{saveError}</div>
             )}
+            <div className="flex justify-end gap-2 pt-3 border-t shrink-0 mt-2">
+              <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">取消</button>
+              <button type="button" onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -535,6 +607,7 @@ export default function PartMasters() {
               <TabBtn active={detailTab === 'cad'} onClick={() => setDetailTab('cad')}>CAD附件</TabBtn>
               <TabBtn active={detailTab === 'production'} onClick={() => setDetailTab('production')}>生产附件</TabBtn>
               {viewing.childCount > 0 && <TabBtn active={detailTab === 'bom'} onClick={() => setDetailTab('bom')}>子项清单</TabBtn>}
+              {viewing.childCount === 0 && <TabBtn active={detailTab === 'bom'} onClick={() => setDetailTab('bom')}>子项清单</TabBtn>}
               <TabBtn active={detailTab === 'versions'} onClick={() => setDetailTab('versions')}>版本历史</TabBtn>
             </div>
 
@@ -577,29 +650,14 @@ export default function PartMasters() {
               <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} />
             )}
 
-            {detailTab === 'bom' && viewing.childCount > 0 && (
+            {detailTab === 'bom' && (
               <div>
-                <h4 className="text-sm font-bold text-gray-700 mb-2">BOM 子件 ({viewing.childCount})</h4>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-gray-500 font-medium">子件编号</th>
-                        <th className="px-3 py-2 text-left text-gray-500 font-medium">名称</th>
-                        <th className="px-3 py-2 text-right text-gray-500 font-medium w-20">用量</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {viewing.usageLinks.map((u) => (
-                        <tr key={u.componentNumber} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 font-medium font-mono">{u.componentNumber}</td>
-                          <td className="px-3 py-2">{u.componentName}</td>
-                          <td className="px-3 py-2 text-right">{u.amount} {u.unit}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <h4 className="text-sm font-bold text-gray-700 mb-2">子项清单 ({viewing.childCount})</h4>
+                {viewing.childCount === 0 ? (
+                  <div className="text-sm text-gray-400 py-4 text-center">暂无子项</div>
+                ) : (
+                  <BOMTreeTable assemblyId={viewing.id} />
+                )}
               </div>
             )}
 

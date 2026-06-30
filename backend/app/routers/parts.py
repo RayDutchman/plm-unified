@@ -28,6 +28,7 @@ from app.crud.part import (
 from app.database import get_db
 from app.models import User
 from app.models.part import PartMaster
+from app.models.part import PartRevision, PartIteration
 from app.routers.auth import get_current_active_user
 from app.schemas.part import (
     CheckoutResponse,
@@ -312,3 +313,186 @@ def _enrich_response(db: Session, master) -> PartResponse:
         resp.usage_links = ulinks
 
     return resp
+
+
+# ---------------------------------------------------------------------------
+# 装配子项管理（PartUsageLink CRUD on PartMaster）
+# ---------------------------------------------------------------------------
+
+@router.get("/{identifier}/parts", summary="查询零部件子项清单")
+def list_part_children(
+    identifier: str,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    from app.models.assembly import PartUsageLink
+    from app.models.part import PartRevision, PartIteration
+    uid = uuid.UUID(identifier)
+    master = db.query(PartMaster).filter(PartMaster.id == uid, PartMaster.deleted_at.is_(None)).first()
+    if not master:
+        raise HTTPException(status_code=404, detail="零部件不存在")
+    result = []
+    revisions = db.query(PartRevision).filter(
+        PartRevision.part_master_id == master.id, PartRevision.deleted_at.is_(None)
+    ).order_by(PartRevision.version.desc()).all()
+    for rev in revisions:
+        iterations = db.query(PartIteration).filter(
+            PartIteration.part_revision_id == rev.id
+        ).order_by(PartIteration.iteration.desc()).all()
+        for it in iterations:
+            links = db.query(PartUsageLink).filter(
+                PartUsageLink.parent_iteration_id == it.id
+            ).order_by(PartUsageLink.order).all()
+            for link in links:
+                child_master = db.get(PartMaster, link.component_master_id)
+                result.append({
+                    "id": str(link.id),
+                    "childType": "part" if not _has_children(db, link.component_master_id) else "component",
+                    "child_id": str(link.component_master_id),
+                    "quantity": link.amount,
+                    "unit": link.unit,
+                    "child_detail": {
+                        "id": str(child_master.id) if child_master else "",
+                        "code": child_master.number if child_master else "?",
+                        "name": child_master.name if child_master else "?",
+                        "spec": child_master.type or "",
+                    } if child_master else None,
+                    "created_at": "",
+                })
+    return result
+
+
+def _has_children(db: Session, master_id: uuid.UUID) -> bool:
+    from app.models.assembly import PartUsageLink
+    revisions = db.query(PartRevision).filter(PartRevision.part_master_id == master_id, PartRevision.deleted_at.is_(None)).all()
+    for rev in revisions:
+        iterations = db.query(PartIteration).filter(PartIteration.part_revision_id == rev.id).all()
+        for it in iterations:
+            if db.query(PartUsageLink).filter(PartUsageLink.parent_iteration_id == it.id).first():
+                return True
+    return False
+
+
+class AddPartChildBody(BaseModel):
+    child_type: str = "part"
+    child_id: str
+    quantity: float = 1.0
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+
+class UpdatePartChildBody(BaseModel):
+    quantity: float
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+
+@router.post("/{identifier}/parts", summary="添加子项")
+def add_part_child(
+    identifier: str,
+    data: AddPartChildBody,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    from app.models.assembly import PartUsageLink
+    uid = uuid.UUID(identifier)
+    master = db.query(PartMaster).filter(PartMaster.id == uid, PartMaster.deleted_at.is_(None)).first()
+    if not master:
+        raise HTTPException(status_code=404, detail="零部件不存在")
+    child = db.query(PartMaster).filter(PartMaster.id == uuid.UUID(data.child_id), PartMaster.deleted_at.is_(None)).first()
+    if not child:
+        raise HTTPException(status_code=404, detail="子零部件不存在")
+    latest_rev = db.query(PartRevision).filter(
+        PartRevision.part_master_id == master.id, PartRevision.deleted_at.is_(None)
+    ).order_by(PartRevision.version.desc()).first()
+    if not latest_rev:
+        raise HTTPException(status_code=400, detail="零部件没有版本记录")
+    it = db.query(PartIteration).filter(
+        PartIteration.part_revision_id == latest_rev.id
+    ).order_by(PartIteration.iteration.desc()).first()
+    if not it:
+        raise HTTPException(status_code=400, detail="没有可用迭代")
+    link = PartUsageLink(
+        id=uuid.uuid4(),
+        parent_iteration_id=it.id,
+        component_master_id=child.id,
+        amount=data.quantity,
+    )
+    db.add(link)
+    db.commit()
+    return {"id": str(link.id), "message": "子项已添加"}
+
+
+@router.put("/{identifier}/parts/{item_id}", summary="更新子项用量")
+def update_part_child(
+    identifier: str,
+    item_id: str,
+    data: UpdatePartChildBody,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    from app.models.assembly import PartUsageLink
+    link = db.query(PartUsageLink).filter(PartUsageLink.id == uuid.UUID(item_id)).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="子项不存在")
+    link.amount = data.quantity
+    db.commit()
+    return {"message": "用量已更新"}
+
+
+@router.delete("/{identifier}/parts/{item_id}", summary="移除子项")
+def remove_part_child(
+    identifier: str,
+    item_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    from app.models.assembly import PartUsageLink
+    link = db.query(PartUsageLink).filter(PartUsageLink.id == uuid.UUID(item_id)).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="子项不存在")
+    db.delete(link)
+    db.commit()
+    return {"message": "子项已移除"}
+
+
+@router.get("/{identifier}/parents", summary="查询零部件所有上级父项")
+def get_part_parents(
+    identifier: str,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    from app.models.assembly import PartUsageLink
+    uid = uuid.UUID(identifier)
+    master = db.query(PartMaster).filter(PartMaster.id == uid, PartMaster.deleted_at.is_(None)).first()
+    if not master:
+        raise HTTPException(status_code=404, detail="零部件不存在")
+
+    ancestors = set()
+    visited = set()
+    queue = [uid]
+
+    while queue:
+        current = queue.pop(0)
+        if current in visited:
+            continue
+        visited.add(current)
+        links = db.query(PartUsageLink).filter(
+            PartUsageLink.component_master_id == current
+        ).all()
+        for link in links:
+            it = db.get(PartIteration, link.parent_iteration_id)
+            if not it:
+                continue
+            rev = db.get(PartRevision, it.part_revision_id)
+            if not rev or rev.deleted_at is not None:
+                continue
+            pm = db.get(PartMaster, rev.part_master_id)
+            if pm and pm.id not in ancestors:
+                ancestors.add(pm.id)
+                queue.append(pm.id)
+
+    return [{"id": str(a), "number": "", "name": ""} for a in ancestors]
