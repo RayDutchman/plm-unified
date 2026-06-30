@@ -19,6 +19,7 @@ import Projects from './pages/Project/Projects';
 import DataManagement from './pages/DataManagement';
 const STPViewer = lazy(() => import('./pages/STPViewer'));
 const OfficeReader = lazy(() => import('./pages/OfficeReader'));
+const ViewerPage = lazy(() => import('./pages/AssemblyViewerPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
@@ -50,6 +51,16 @@ export default function App() {
             <ProtectedRoute>
               <Suspense fallback={<div className="w-screen h-screen flex items-center justify-center text-gray-400">加载中...</div>}>
                 <OfficeReader />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/viewer"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<div className="w-screen h-screen flex items-center justify-center bg-[#2a2a2e] text-gray-400">加载中...</div>}>
+                <ViewerPage />
               </Suspense>
             </ProtectedRoute>
           }
