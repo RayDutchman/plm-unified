@@ -31,10 +31,10 @@ app.include_router(iterations_router)
 app.include_router(conversion_compat_router, prefix="/api")
 
 # Phase 1: 实体层（逐步取消注释激活）
-# from app.routers.users import router as users_router
-# app.include_router(users_router, prefix="/api")
-# from app.routers.user_groups import router as user_groups_router
-# app.include_router(user_groups_router, prefix="/api")
+from app.routers.users import router as users_router
+app.include_router(users_router, prefix="/api")
+from app.routers.user_groups import router as user_groups_router
+app.include_router(user_groups_router, prefix="/api")
 # from app.routers.documents import router as documents_router
 # app.include_router(documents_router, prefix="/api")
 # from app.routers.attachments_v2 import router as attachments_router
