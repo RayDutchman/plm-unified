@@ -32,6 +32,7 @@ def _get_revision_for_update(
 ) -> PartRevision:
     """
     查询指定零件的版本行并加行锁（SELECT FOR UPDATE）。
+    master 和 revision 都加锁，防止并发软删除 master 后 revision 查询结果过时。
     未找到抛 404，已软删除抛 404。
     """
     master = (
@@ -41,6 +42,7 @@ def _get_revision_for_update(
             PartMaster.number == number,
             PartMaster.deleted_at.is_(None),
         )
+        .with_for_update()
         .first()
     )
     if not master:

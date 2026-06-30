@@ -261,6 +261,28 @@ class TestUndoCheckout:
         assert len(iters) == 1
         assert iters[0].iteration == 1
 
+    def test_undocheckout_on_iteration_1_keeps_iteration(self, db, sample_part_data, user_a):
+        """
+        iteration==1 时撤销签出：清签出锁但不删除 iteration 1。
+        （iteration 1 是零件的首个迭代，即使从未签入也不应被删除，
+         因为设计上 iteration > 1 才是"可丢弃的草稿"）
+        """
+        master = create_part(db, sample_part_data, author_id=user_a.id)
+        # 创建后自动在 iteration 1 处签出，直接撤销（不先签入）
+
+        rev = undocheckout(db, "PART-001", "A", master.workspace_id, current_user_id=user_a.id)
+        assert rev.checkout_user_id is None
+
+        # iteration 1 应保留（不删除）
+        iters = (
+            db.query(PartIteration)
+            .filter_by(part_revision_id=rev.id)
+            .all()
+        )
+        assert len(iters) == 1
+        assert iters[0].iteration == 1
+        assert iters[0].check_in_date is None  # 仍是草稿（从未签入）
+
     def test_undocheckout_not_checked_out_raises_409(self, db, sample_part_data, user_a):
         """未签出时撤销应抛 409。"""
         master = create_part(db, sample_part_data, author_id=user_a.id)
