@@ -7,3 +7,4 @@
 !install-python-deps.sh
 !requirements-converter.txt
 !wheels/
+!tools/
