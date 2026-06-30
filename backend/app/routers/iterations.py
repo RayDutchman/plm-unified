@@ -217,8 +217,8 @@ async def upload_native_cad(
 # ---------------------------------------------------------------------------
 
 class ConversionCallbackBody(BaseModel):
-    """conversion 服务回调请求体。同时接受 camelCase 和 snake_case 字段名。"""
-    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+    """conversion 服务回调请求体。字段名使用 camelCase（与 Java 服务一致）。"""
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=False)
 
     succeed: bool
     geometry_full_name: Optional[str] = None
