@@ -141,7 +141,7 @@ def get_part_instances(
     """
     递归遍历装配树，层层累乘 mat4，返回每个叶子零件的全局 4×4 变换矩阵。
 
-    - matrix：16 个 double，行优先，前端直接 mesh.applyMatrix4(matrix)
+    - matrix：16 个 double，列优先（column-major），Three.js Matrix4.fromArray() 直接兼容
     - 叶子节点 = 无 usage_links 的迭代（即单个零件，非装配体）
     - config_spec=latest：取最新签入迭代（RELEASED 优先，次选 WIP）
     """

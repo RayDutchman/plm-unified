@@ -347,7 +347,7 @@ def _traverse(
             part_number=master.number,
             version=revision.version if revision else "?",
             iteration=iteration.iteration,
-            matrix=parent_matrix.flatten().tolist(),
+            matrix=parent_matrix.flatten(order='F').tolist(),
             geometry_full_name=geo_full_name,
             **bbox,
         ))
