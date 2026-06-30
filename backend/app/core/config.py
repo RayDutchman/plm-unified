@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     vault_path: str = "/vault"
     # conversion 临时文件目录（与 conversion 容器共享）
     conversions_path: str = "/data/conversions"
+    redis_url: str = "redis://redis:6379"
+    uploads_path: str = "/uploads"
+    cors_origins: list[str] = ["https://localhost:8080", "http://localhost:8080"]
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

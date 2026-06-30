@@ -78,9 +78,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-prod-0123456789abcdef}
       VAULT_PATH: /vault
       CONVERSIONS_PATH: /data/conversions
+      UPLOADS_PATH: /uploads
     volumes:
       - vault_data:/vault
       - conversions_data:/data/conversions
+      - ${UPLOADS_HOST_PATH:-../plm_data/uploads}:/uploads
     ports:
       - "8010:8000"  # 宿主机 8010，避免与 DocDoku 冲突
 
