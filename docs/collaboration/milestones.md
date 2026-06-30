@@ -217,22 +217,35 @@ feat(part-api): 实现签入签出状态机
 
 **M2 完成后启动。**
 
-> ✅ **提前量（已达成）**：前端各模块 mock 数据全部完成（2026-06-30）。myPDM 原 UI 页面全部保留，
-> 通过 `VITE_USE_MOCK=1` 模式在无后端环境下可完整渲染 9 个业务模块：
-> 看板/仪表盘、零部件（PartMaster）、构型管理、变更管理（ECR+ECO）、库存管理、系统设置、
-> 图文档、项目管理。mock 适配层注入共享 `api` 实例 + `inventoryAxios` + `projectAxios`
-> 三个独立 axios 实例，路由覆盖 150+ 条。待 M2 后端完成后，mock 层可直接逐一替换为真实 API。
+> ✅ **提前量（2026-06-30，`feat/frontend-mock` 已合并 `dev_myPDM`）**：
+>
+> **Mock 全覆盖**：通过 `VITE_USE_MOCK=1` 在无后端环境下可完整渲染 9 个业务模块
+> （看板/仪表盘、零部件、构型管理、变更管理 ECR+ECO、库存管理、系统设置、图文档、项目管理）。
+> mock 适配层注入共享 `api` 实例 + `inventoryAxios` + `projectAxios` 三个独立 axios 实例，
+> 路由覆盖 150+ 条。待 M2 后端完成后可逐一替换为真实 API。
+>
+> **零部件管理 UI 对齐**：`PartMasters.tsx` 完全照抄 myPDM `ComponentsPage.tsx` 视觉风格——
+> 全高弹性布局、搜索下拉+状态筛选+全部版本复选框单行排列、sticky 可排序表头、
+> 模态弹窗详情（基本信息+版本历史双标签、卡片式网格布局、BOM 子件表）、
+> 新增/编辑模态表单（`bg-gray-50 rounded-lg border` 卡片风格）、
+> 状态标签 WIP→草稿 / RELEASED→发布 / OBSOLETE→作废。
+>
+> **导航栏对齐**：侧边栏菜单顺序完全对齐 myPDM
+> （仪表盘→看板→管理工具 ‖ 构型管理→零部件→图文档 ‖ 变更→库存→项目 ‖ 用户→设置）。
+>
+> **Bug 修复**：图文档附件列表响应 shape 不匹配导致 `DocumentDetailContent` 渲染崩溃
+> （mock 返回 `{items,total}` 对象而非数组，`.map()` 报错）。
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 3.1 | 升级现有 3D 查看器 Three.js 到最新版（r168+），处理 breaking change，确保旧功能不退化 | A | 串行起点（可与 M2 末期并行提前开始） |
-| 3.2 | 将升级后的 3D 查看器部署为独立静态服务（新增 `viewer` nginx 容器） | A | → 3.1 |
-| 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 |
-| 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 |
-| 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 |
-| 3.6 | 在零件详情页嵌入 3D 查看器 iframe（传入 JWT Token + 零件路径参数） | B | → 3.2 & 3.4 |
-| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 测试通过后 |
-| 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 3.1 | 升级现有 3D 查看器 Three.js 到最新版（r168+），处理 breaking change，确保旧功能不退化 | A | 串行起点（可与 M2 末期并行提前开始） | ⬜ |
+| 3.2 | 将升级后的 3D 查看器部署为独立静态服务（新增 `viewer` nginx 容器） | A | → 3.1 | ⬜ |
+| 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 | ⬜ |
+| 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 | 🟡（UI 已就绪，数据仍走 mock） |
+| 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 | ⬜ |
+| 3.6 | 在零件详情页嵌入 3D 查看器 iframe（传入 JWT Token + 零件路径参数） | B | → 3.2 & 3.4 | ⬜ |
+| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 测试通过后 | ⬜ |
+| 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 | ⬜ |
 
 **✅ M3 达成条件**：验收测试全部通过——用户完全通过 React 前端完成零件创建、BOM 查看、3D 预览，Backbone.js 前端不再需要，旧 `front` 容器已下线。
 
