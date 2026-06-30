@@ -91,83 +91,67 @@ function CameraController({ onReady }: { onReady: (callbacks: Record<string, () 
   // 暴露给工具栏的回调
   useEffect(() => {
     onReady({
-      // DocDoku resetCameraPlace：回到默认视角
+      // DocDoku resetCameraPlace（1000ms, Linear, target=(0,0,0), camUp=(0,0,1)）
       reset: () => {
         if (!controlsRef.current) return;
-        const pos = new THREE.Vector3(-1000, -1000, 1000);
-        const tgt = new THREE.Vector3(0, 0, 0);
-        // 动画过渡
+        const ctrl = controlsRef.current as any;
+        const endPos = new THREE.Vector3(-1000, -1000, 1000);
+        const endTgt = new THREE.Vector3(0, 0, 0);
+        const endUp = new THREE.Vector3(0, 0, 1);
         let elapsed = 0;
+        let lastTime = performance.now();
         const startPos = camera.position.clone();
-        const startTgt = (controlsRef.current as any).target.clone();
-        const duration = 0.4; // 秒
-
-        function animate(dt: number) {
-          elapsed += dt;
-          const t = Math.min(elapsed / duration, 1);
-          const ease = 1 - Math.pow(1 - t, 3);
-          camera.position.lerpVectors(startPos, pos, ease);
-          (controlsRef.current as any).target.lerpVectors(startTgt, tgt, ease);
-          camera.lookAt((controlsRef.current as any).target);
-          (controlsRef.current as any).update();
-        }
-
-        // 用 requestAnimationFrame 简单实现（不需要引入 extra deps）
-        let frameId: number;
-        let prevTime = performance.now();
+        const startTgt = ctrl.target.clone();
+        const startUp = camera.up.clone();
         const loop = () => {
           const now = performance.now();
-          animate((now - prevTime) / 1000);
-          prevTime = now;
-          if (elapsed < duration) {
-            frameId = requestAnimationFrame(loop);
-          }
+          elapsed += (now - lastTime) / 1000;
+          lastTime = now;
+          const t = Math.min(elapsed / 1.0, 1); // Linear
+          camera.position.lerpVectors(startPos, endPos, t);
+          ctrl.target.lerpVectors(startTgt, endTgt, t);
+          camera.up.lerpVectors(startUp, endUp, t);
+          camera.lookAt(ctrl.target);
+          ctrl.update();
+          if (elapsed < 1.0) requestAnimationFrame(loop);
         };
-        frameId = requestAnimationFrame(loop);
+        requestAnimationFrame(loop);
       },
 
-      // DocDoku bestFitView：根据全局包围盒自适应距离
+      // DocDoku bestFitView：radius*2（1000ms, Quintic.InOut）
       bestFit: () => {
         if (!controlsRef.current || instances.length === 0) return;
         const box = calcGlobalBBox();
         if (box.isEmpty()) return;
+        const ctrl = controlsRef.current as any;
         const center = box.getCenter(new THREE.Vector3());
-        const maxDim = Math.max(
+        const radius = Math.max(
           box.max.x - box.min.x,
           box.max.y - box.min.y,
           box.max.z - box.min.z,
         );
-        const dist = maxDim * 2;
-        const endPos = new THREE.Vector3(
-          center.x + dist * 0.6,
-          center.y + dist * 0.5,
-          center.z + dist,
-        );
+        const dist = Math.max(radius * 2, 1);
+        const dir = center.clone().sub(camera.position).normalize();
+        if (dir.lengthSq() < 0.001) dir.set(1, 1, -1).normalize();
+        const endPos = center.clone().addScaledVector(dir, -dist);
 
         let elapsed = 0;
+        let lastTime = performance.now();
         const startPos = camera.position.clone();
-        const startTgt = (controlsRef.current as any).target.clone();
-        const duration = 0.4;
-
-        function animate(dt: number) {
-          elapsed += dt;
-          const t = Math.min(elapsed / duration, 1);
-          const ease = 1 - Math.pow(1 - t, 3);
-          camera.position.lerpVectors(startPos, endPos, ease);
-          (controlsRef.current as any).target.lerpVectors(startTgt, center, ease);
-          camera.lookAt((controlsRef.current as any).target);
-          (controlsRef.current as any).update();
-        }
-
-        let frameId: number;
-        let prevTime = performance.now();
+        const startTgt = ctrl.target.clone();
         const loop = () => {
           const now = performance.now();
-          animate((now - prevTime) / 1000);
-          prevTime = now;
-          if (elapsed < duration) frameId = requestAnimationFrame(loop);
+          elapsed += (now - lastTime) / 1000;
+          lastTime = now;
+          const t = Math.min(elapsed / 1.0, 1);
+          const ease = 1 - Math.pow(1 - t, 3); // Quintic.InOut
+          camera.position.lerpVectors(startPos, endPos, ease);
+          ctrl.target.lerpVectors(startTgt, center, ease);
+          camera.lookAt(ctrl.target);
+          ctrl.update();
+          if (elapsed < 1.0) requestAnimationFrame(loop);
         };
-        frameId = requestAnimationFrame(loop);
+        requestAnimationFrame(loop);
       },
     });
   }, [instances, camera, onReady, calcGlobalBBox]);
@@ -204,17 +188,15 @@ function AutoFit() {
     }
     if (box.isEmpty()) return;
     const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(
+    const radius = Math.max(
       box.max.x - box.min.x,
       box.max.y - box.min.y,
       box.max.z - box.min.z,
     );
-    const dist = Math.max(maxDim * 2, 1);
-    camera.position.set(
-      center.x + dist * 0.6,
-      center.y + dist * 0.5,
-      center.z + dist,
-    );
+    // DocDoku defaultDirection: {x:1, y:1, z:-1} normalized (from vizReset)
+    const dir = new THREE.Vector3(1, 1, -1).normalize();
+    const dist = Math.max(radius * 2, 1);
+    camera.position.copy(center.clone().addScaledVector(dir, dist));
     camera.lookAt(center);
     (camera as THREE.PerspectiveCamera).near = 0.1;
     (camera as THREE.PerspectiveCamera).far = 50000;
@@ -273,7 +255,7 @@ export function AssemblyCanvas() {
       </div>
 
       <Canvas
-        camera={{ position: [-1000, -1000, 1000], fov: 45, near: 0.1, far: 50000 }}
+        camera={{ position: [-1000, -1000, 1000], fov: 45, near: 0.1, far: 50000, up: [0, 0, 1] }}
         style={{ width: '100%', height: '100%' }}
         gl={{
           preserveDrawingBuffer: true,
@@ -283,8 +265,8 @@ export function AssemblyCanvas() {
         }}
       >
         <SceneBackground />
-        {/* 半球光：底部/暗面补光，位于世界原点高阶，强度弱（对齐 DocDoku） */}
-        <hemisphereLight args={[0x8899bb, 0x333344, 0.2]} position={[0, 500, 0]} />
+        {/* 半球光：对齐 DocDoku HSL 颜色 + position(0,0,500) + 强度0.3 */}
+        <hemisphereLight args={[new THREE.Color().setHSL(0.6, 0.5, 0.5).getHex(), new THREE.Color().setHSL(0.095, 0.5, 0.4).getHex(), 0.3]} position={[0, 0, 500]} />
         <CameraLights />
 
         <Suspense fallback={null}>
