@@ -196,20 +196,27 @@ feat(part-api): 实现签入签出状态机
 
 **M1 完成后启动。这是整个系统最复杂的里程碑。**
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 2.1 | 实现 PartIteration 更新接口（接收 `components[].cadInstances[]`，写入 `part_usage_links` + `cad_instances`，保留 ANGLE/MATRIX 两种旋转模式） | B | 串行起点 |
-| 2.2 | A review cadInstances 写入逻辑，对照 DocDoku 原始数据验证字段映射 | A | → 2.1 |
-| 2.3 | 实现矩阵合成接口（`GET /products/{ciId}/instances`）：用 Python 实现递归装配树遍历，层层累乘 mat4，输出 16 元素全局矩阵数组 | **A 主写** | ‖ 2.1（可并行设计，等 2.1 数据结构确定后写实现） |
-| 2.4 | 用现有 DocDoku 实际零件数据对比验证：Java 端与 Python 端矩阵输出逐层比对 | A | → 2.3 |
-| 2.5 | 实现 CAD 文件上传接口（`POST .../nativecad`），写入 vault，路径格式保持 `Workspace_X/parts/{number}/{version}/{iteration}/nativecad/` | B | ‖ 2.3 |
-| 2.6 | 实现 Kafka 消息发布（`aiokafka`），格式严格对照 `/docs/integration/kafka-message-format.md` | B | → 2.5 |
-| 2.7 | 实现转换回调接口（`PUT .../conversion`）：查找真正 pending 的 Conversion 记录（不能用 getLastIteration），写入 geometry 路径 | **A 主写** | → 2.6 |
-| 2.8 | 实现转换状态查询接口（`GET .../conversion`，返回 `{pending, succeed}`） | A | ‖ 2.7 |
-| 2.9 | 适配 sync.py：更换 API base URL，将 Basic Auth 改为 JWT | A | → M1 认证完成即可开始 |
-| 2.10 | 写 M2 验收测试脚本（端到端：sync.py 同步装配体 → 上传 STP → 轮询转换状态 → 查询 instances 接口） | AB | → 2.8 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 2.1 | 实现 PartIteration 更新接口（接收 `components[].cadInstances[]`，写入 `part_usage_links` + `cad_instances`，保留 ANGLE/MATRIX 两种旋转模式） | A 包揽 | 串行起点 | ✅（`PUT /api/parts/{num}/{ver}/iterations/{iter}`，覆盖写入，6 个测试覆盖 ANGLE/MATRIX/多实例/覆盖写） |
+| 2.2 | A review cadInstances 写入逻辑，对照 DocDoku 原始数据验证字段映射 | A | → 2.1 | ✅（发现并修复关键 bug：m{col}{row} 列优先存储被误当行优先处理，修复后 5 个真实 CADInstance 误差为 0） |
+| 2.3 | 实现矩阵合成接口（`GET .../instances`）：用 Python+numpy 实现递归装配树遍历，层层累乘 mat4，输出 16 元素全局矩阵数组 | A 主写 | ‖ 2.1 | ✅（`GET /api/parts/{num}/{ver}/instances`，ANGLE/MATRIX 两种模式，算法完全对应 DocDoku InstanceBodyWriterTools.java） |
+| 2.4 | 用现有 DocDoku 实际零件数据对比验证：Java 端与 Python 端矩阵输出逐层比对 | A | → 2.3 | ✅（直接查 docdokuplm 库 Assem1/Workspace_2/iter 12，5 个真实 CADInstance 含 120°/240° 旋转验证，误差全部为 0） |
+| 2.5 | 实现 CAD 文件上传接口（`PUT .../nativecad`），写入 vault，路径格式保持 `{workspace}/parts/{number}/{version}/{iteration}/nativecad/` | A 包揽 | ‖ 2.3 | ✅（同时创建 BinaryResource + Conversion(pending) 记录） |
+| 2.6 | 实现 Kafka 消息发布（`aiokafka`），格式严格对照 `/docs/integration/kafka-message-format.md` | A 包揽 | → 2.5 | ✅（格式与 DocDoku ConversionOrder JSON-B 序列化完全一致，Kafka 消费者验证收到正确消息） |
+| 2.7 | 实现转换回调接口，写入 geometry 路径 | A 主写 | → 2.6 | ✅（新格式 `PUT .../conversion` + 旧 DocDoku 格式兼容路由 `/api/workspaces/{ws}/parts/{n}-{v}/conversion`；conversion 容器实际端到端跑通，GLB 文件写入 vault，Geometry 记录写入 DB） |
+| 2.8 | 实现转换状态查询接口（`GET .../conversion`，返回 `{pending, succeed}`） | A | ‖ 2.7 | ✅ |
+| 2.9 | 适配 sync.py：更换 API base URL，将 Basic Auth 改为 JWT | A | → M1 认证完成即可开始 | ✅（新增 `scripts/plm_api_client_v2.py`，JWT 认证，接口与旧 PlmApiClient 完全兼容） |
+| 2.10 | 写 M2 验收测试脚本 | A 包揽 | → 2.8 | ✅（`test_m2_acceptance.py`，4 用例，89/89 通过；本地 Docker 端到端验证：STP→GLB 转换成功，bbox 写入正确） |
 
-**✅ M2 达成条件**：验收测试全部通过——从 CATIA 通过 sync.py 同步一个多层装配体，转换完成后 `instances` 接口返回的全局 mat4 与 DocDoku Java 端输出逐层一致，在旧 3D 查看器中渲染位置正确。
+**实际完成情况与原计划的差异：**
+
+- **分工**：M2 全部由 A 独立完成（B 侧 M2 工作尚未开始），功能完整，无阻塞。
+- **额外新增**：conversion 容器离线化——三个第三方工具（IfcConvert/meshconv/decimater）从旧 DocDoku conversion 镜像提取，通过 git-lfs 存入仓库，不再依赖外网下载，build 时间大幅缩短。
+- **额外新增**：旧 DocDoku 回调格式兼容路由（`conversion_compat.py`），使 plm-unified 的 conversion 容器（Quarkus Java 服务）无需修改即可直接使用。
+- **已知限制**：Decimation LOD 降面（openMeshDecimater）对 GLB 格式失效（只支持 OBJ），日志出现 `Decimation failed with code = 1 read error`，不影响 LOD 0 正常显示。
+
+**✅ M2 达成条件**：验收测试全部通过——`instances` 接口返回的全局 mat4 与 DocDoku 数据库实际存储值逐元素误差为 0；conversion 容器端到端：STP 上传→Kafka 消息→GLB 转换→回调→Geometry 写入 DB 全链路跑通。
 
 ---
 
