@@ -45,8 +45,8 @@ from app.routers.bom import router as bom_router
 app.include_router(bom_router, prefix="/api")
 
 # Phase 3: 流程层
-# from app.routers.ecrs import router as ecrs_router
-# app.include_router(ecrs_router, prefix="/api")
+from app.routers.ecrs import router as ecrs_router
+app.include_router(ecrs_router, prefix="/api")
 # from app.routers.ecos import router as ecos_router
 # app.include_router(ecos_router, prefix="/api")
 
