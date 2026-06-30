@@ -260,6 +260,20 @@ export const attachmentApi = {
     api.get<import('../types').ArchiveTreeResponse>(`/v2/attachments/${id}/archive-tree`, { params: { token } }),
 };
 
+// 部件附件 API
+export type ComponentAttachment = {
+  id: string;
+  file_name: string;
+  file_size: number;
+};
+
+export const componentAttachmentsApi = {
+  list: (componentId: string, category: string) =>
+    api.get<ComponentAttachment[]>(`/components/${componentId}/attachments`, { params: { category } }),
+  remove: (componentId: string, attachmentId: string) =>
+    api.delete(`/components/${componentId}/attachments/${attachmentId}`),
+};
+
 // 媒体令牌 API（替代 ?token= 的会话 JWT）
 export const mediaApi = {
   token: (attId: string, action: 'preview' | 'direct-download' | 'gltf' | 'archive-tree' | 'extract-file' | 'office-pdf') =>
@@ -298,12 +312,14 @@ export const v2UploadApi = {
     file: File,
     entityType: string = 'documents',
     entityId: string,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    category?: string,
   ): Promise<{ id: string; file_name: string; file_size: number; file_path: string }> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('entity_type', entityType);
     formData.append('entity_id', entityId);
+    if (category) formData.append('category', category);
 
     return uploadAxios.post('/v2/attachments/upload', formData, {
       onUploadProgress: (progressEvent) => {
@@ -323,7 +339,8 @@ export const v2UploadApi = {
     filename: string,
     fileSize: number,
     entityType: string = 'documents',
-    entityId: string
+    entityId: string,
+    category?: string,
   ): Promise<{
     upload_id: string;
     total_chunks: number;
@@ -334,6 +351,7 @@ export const v2UploadApi = {
     formData.append('file_size', String(fileSize));
     formData.append('entity_type', entityType);
     formData.append('entity_id', entityId);
+    if (category) formData.append('category', category);
 
     return uploadAxios.post('/v2/attachments/chunk/init', formData)
       .then(res => res.data);
