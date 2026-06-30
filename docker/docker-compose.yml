@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: plm
       POSTGRES_PASSWORD: plmpass
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ${PGDATA_HOST_PATH:-../plm_data/pgdata}:/var/lib/postgresql/data
     ports:
       - "5435:5432"  # 宿主机 5435，避免与已有 PostgreSQL 冲突
     healthcheck:
@@ -75,7 +75,7 @@ services:
       DATABASE_URL: postgresql://plm:plmpass@db:5432/plm_unified
       REDIS_URL: redis://redis:6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JWT_SECRET: dev-only-jwt-secret-change-in-prod-0123456789abcdef  # ≥32 字符；生产用 openssl rand -hex 32
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-prod-0123456789abcdef}
       VAULT_PATH: /vault
     volumes:
       - vault_data:/vault
@@ -98,5 +98,4 @@ services:
       - vault_data:/vault
 
 volumes:
-  db_data:
   vault_data:
