@@ -1,10 +1,330 @@
-# REST API 参考（DocDoku 原始接口笔记）
+# REST API 参考
+
+> **本文档分两部分：**
+> - **Part 1（本页顶部）**：plm-unified FastAPI 新接口（M1 实现，持续更新）
+> - **Part 2（本页底部）**：DocDoku 原始接口笔记（迁移自 CATIA-Copilot-PLM，保留作参考）
+
+---
+
+## Part 1：plm-unified 新接口（M1）
+
+> 本地 Swagger UI：`http://localhost:8010/api/docs`  
+> 认证：除 `/api/auth/token` 外，所有端点需要 `Authorization: Bearer <access_token>`
+
+### 通用约定
+
+| 项 | 说明 |
+|---|---|
+| 基础路径 | `http://localhost:8010` |
+| Content-Type | `application/json`（除登录接口用 form-data） |
+| 响应字段格式 | camelCase（`checkoutUserId` 而非 `checkout_user_id`） |
+| 请求体字段格式 | camelCase 或 snake_case 均可（`populate_by_name=True`） |
+| 错误格式 | `{"detail": "错误描述"}` |
+| 软删除 | 已删除记录不出现在任何列表和查询中 |
+
+---
+
+### 认证（Auth）
+
+#### POST `/api/auth/token` — 登录获取令牌
+
+请求体（`application/x-www-form-urlencoded`）：
+
+```
+username=admin&password=admin12345
+```
+
+响应（200）：
+
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "token_type": "bearer"
+}
+```
+
+- `access_token` 有效期 8 小时（`typ=access`）
+- `refresh_token` 有效期 7 天（`typ=refresh`），仅用于刷新，不可直接访问业务接口
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 登录成功 |
+| 401 | 用户名或密码错误 |
+
+---
+
+#### POST `/api/auth/refresh` — 刷新令牌
+
+请求体（JSON）：
+
+```json
+{ "refreshToken": "eyJ..." }
+```
+
+响应（200）：同 `/token`，返回新的 access + refresh 令牌对。
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 刷新成功 |
+| 401 | refresh_token 无效/过期/类型错误 |
+
+---
+
+#### GET `/api/auth/me` — 当前用户信息
+
+响应（200）：
+
+```json
+{
+  "id": "00000000-0000-0000-0000-000000000010",
+  "workspaceId": "00000000-0000-0000-0000-000000000001",
+  "username": "admin",
+  "realName": "系统管理员",
+  "role": "admin",
+  "department": null,
+  "phone": null,
+  "status": "active",
+  "createdAt": "2026-06-29T00:00:00Z",
+  "updatedAt": "2026-06-29T00:00:00Z"
+}
+```
+
+---
+
+#### POST `/api/auth/change-password` — 修改密码
+
+请求体（JSON）：
+
+```json
+{ "oldPassword": "admin12345", "newPassword": "newpass123" }
+```
+
+响应（200）：`{"message": "密码修改成功"}`
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 修改成功 |
+| 400 | 原密码错误 |
+| 401 | 未登录 |
+
+---
+
+### 零件管理（Parts）
+
+所有零件接口均需 `workspace_id` 参数（query 或 body），用于隔离工作空间数据。
+
+#### POST `/api/parts` — 创建零件
+
+**原子操作**：一次请求创建三层数据（PartMaster + PartRevision A + PartIteration 1），并自动以创建者身份签出。
+
+请求体（JSON）：
+
+```json
+{
+  "number": "PART-001",
+  "name": "主轴零件",
+  "workspaceId": "00000000-0000-0000-0000-000000000001",
+  "type": "机械件",
+  "standardPart": false,
+  "description": "首版描述（可选）"
+}
+```
+
+字段约束：
+
+| 字段 | 类型 | 约束 |
+|---|---|---|
+| `number` | string | 必填，1~100 字符，工作空间内唯一 |
+| `name` | string | 必填，1~255 字符 |
+| `workspaceId` | UUID | 必填 |
+| `type` | string | 可选，max 50 字符 |
+| `standardPart` | bool | 默认 false |
+| `description` | string | 可选，传给首个版本 |
+
+响应（201）：
+
+```json
+{
+  "id": "uuid",
+  "workspaceId": "uuid",
+  "number": "PART-001",
+  "name": "主轴零件",
+  "type": "机械件",
+  "standardPart": false,
+  "authorId": "uuid",
+  "createdAt": "2026-06-29T...",
+  "updatedAt": "2026-06-29T...",
+  "deletedAt": null,
+  "revisions": [
+    {
+      "id": "uuid",
+      "version": "A",
+      "status": "WIP",
+      "description": "首版描述",
+      "checkoutUserId": "uuid",
+      "checkoutDate": "2026-06-29T...",
+      "createdAt": "2026-06-29T...",
+      "iterations": [
+        {
+          "id": "uuid",
+          "iteration": 1,
+          "iterationNote": null,
+          "nativeCadFileId": null,
+          "checkInDate": null,
+          "authorId": "uuid",
+          "createdAt": "2026-06-29T..."
+        }
+      ]
+    }
+  ]
+}
+```
+
+| 状态码 | 原因 |
+|---|---|
+| 201 | 创建成功 |
+| 409 | 同工作空间编号已存在 |
+| 401 | 未登录 |
+
+---
+
+#### GET `/api/parts` — 零件列表
+
+Query 参数：
+
+| 参数 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `workspace_id` | UUID | ✅ | 工作空间 ID |
+| `skip` | int | - | 分页偏移，默认 0 |
+| `limit` | int | - | 每页条数，默认 50，最大 200 |
+
+响应（200）：`PartListItem[]`，每项含最新版本签出状态：
+
+```json
+[
+  {
+    "id": "uuid",
+    "workspaceId": "uuid",
+    "number": "PART-001",
+    "name": "主轴零件",
+    "type": "机械件",
+    "standardPart": false,
+    "authorId": "uuid",
+    "createdAt": "...",
+    "updatedAt": "...",
+    "latestVersion": "A",
+    "latestStatus": "WIP",
+    "checkoutUserId": "uuid"
+  }
+]
+```
+
+---
+
+#### GET `/api/parts/{number}` — 查询单个零件
+
+Query 参数：`workspace_id`（必填）
+
+响应（200）：同 `POST /api/parts` 的 `PartResponse`，含完整版本/迭代层级。
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 返回零件详情 |
+| 404 | 零件不存在或已删除 |
+
+---
+
+#### PUT `/api/parts/{number}/{version}/checkout` — 签出
+
+Query 参数：`workspace_id`（必填）
+
+**行为**：对 `part_revisions` 行加 `SELECT FOR UPDATE`，原子检查并设置签出锁。
+
+响应（200）：
+
+```json
+{
+  "number": "PART-001",
+  "version": "A",
+  "status": "WIP",
+  "checkoutUserId": "uuid",
+  "checkoutDate": "2026-06-29T...",
+  "message": "签出成功"
+}
+```
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 签出成功 |
+| 409 | 已被其他用户签出 |
+| 409 | 版本不是 WIP 状态（RELEASED/OBSOLETE 不可签出） |
+| 404 | 零件或版本不存在 |
+
+---
+
+#### PUT `/api/parts/{number}/{version}/checkin` — 签入
+
+Query 参数：`workspace_id`（必填），`iteration_note`（可选备注）
+
+**行为**：
+1. 冻结当前草稿迭代（写 `checkInDate`）
+2. 创建下一迭代（`iteration + 1`，`checkInDate = null`）
+3. 清除签出锁（`checkoutUserId = null`）
+
+响应（200）：`CheckoutResponse`，`checkoutUserId` 为 null。
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 签入成功 |
+| 409 | 未签出，无法签入 |
+| 409 | 非签出本人，无法签入 |
+
+---
+
+#### PUT `/api/parts/{number}/{version}/undocheckout` — 撤销签出
+
+Query 参数：`workspace_id`（必填）
+
+**行为**：丢弃未签入的草稿迭代（仅当 `iteration > 1` 时删除），清除签出锁。首个迭代（iteration=1）不会被删除。
+
+响应（200）：`CheckoutResponse`，`checkoutUserId` 为 null。
+
+| 状态码 | 原因 |
+|---|---|
+| 200 | 撤销成功 |
+| 409 | 未签出，无法撤销 |
+| 409 | 非签出本人，无法撤销 |
+
+---
+
+### 典型业务流程
+
+#### 创建零件 → 完成首版
+
+```
+POST /api/parts                         → 创建（自动签出到 iteration 1）
+PUT  /api/parts/{n}/A/checkin           → 签入（冻结 iteration 1，创建 iteration 2）
+PUT  /api/parts/{n}/A/checkout          → 再签出（开始修改）
+PUT  /api/parts/{n}/A/checkin           → 再签入（冻结 iteration 2，创建 iteration 3）
+```
+
+#### 并发签出冲突处理
+
+```
+User A: PUT /api/parts/PART-001/A/checkout  → 200（成功）
+User B: PUT /api/parts/PART-001/A/checkout  → 409（已被 User A 签出）
+User A: PUT /api/parts/PART-001/A/checkin   → 200（清锁）
+User B: PUT /api/parts/PART-001/A/checkout  → 200（现在可以签出）
+```
+
+---
+
+## Part 2：DocDoku 原始接口笔记（历史参考）
 
 > **迁移来源：** `CATIA-Copilot-PLM/docs/reference/rest-api.md`  
-> **注意：** 本文档记录的是 DocDoku Java EE 原始接口。plm-unified 已用 FastAPI 重写，接口路径和响应格式会有差异。  
-> 本文档保留价值：① CAD 上传/转换流程逻辑参考；② 装配体位置数据格式参考；③ 数据模型字段含义参考。
-
-> 基于 docdoku-plm-server 源码分析，记录客户端对接时的关键发现。
+> **注意：** 以下记录的是 DocDoku Java EE 原始接口。plm-unified 已用 FastAPI 重写，接口路径和响应格式不同。  
+> 保留价值：① CAD 上传/转换流程逻辑参考；② 装配体位置数据格式参考；③ 数据模型字段含义参考。
 
 ---
 

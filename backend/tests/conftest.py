@@ -1,5 +1,7 @@
 """pytest fixtures：每个测试一个独立 SQLite 内存会话。"""
 import os
+# 在导入任何 app 模块前设置环境变量，防止 database.py 模块级 create_engine 尝试连 PostgreSQL
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-tests-only-xx")
 
 import pytest
