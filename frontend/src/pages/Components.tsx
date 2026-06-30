@@ -12,6 +12,7 @@ import VersionSelectModal from '../components/VersionSelectModal';
 import AssemblyPartPicker from '../components/AssemblyPartPicker';
 import EntityEditModal from '../components/EntityEditModal';
 import EntityDocumentSection from '../components/EntityDocumentSection';
+import ComponentAttachmentBucket from '../components/ComponentAttachmentBucket';
 import { useDataStore } from '../stores/data';
 import { useTableSort } from '../hooks/useTableSort';
 import {
@@ -1341,7 +1342,27 @@ export default function Components() {
 
           {/* 关联图文档（仅编辑已有部件时显示） */}
           {editingAssembly && (
-            <EntityDocumentSection entityType="assembly" entityId={editingAssembly.id} entityCode={editingAssembly.code} entityName={editingAssembly.name} editable />
+            <EntityDocumentSection entityType="component" entityId={editingAssembly.id} entityCode={editingAssembly.code} entityName={editingAssembly.name} editable />
+          )}
+
+          {/* CAD附件 */}
+          {editingAssembly && (
+            <ComponentAttachmentBucket
+              componentId={editingAssembly.id}
+              category="cad"
+              label="CAD附件"
+              editable={true}
+            />
+          )}
+
+          {/* 生产附件 */}
+          {editingAssembly && (
+            <ComponentAttachmentBucket
+              componentId={editingAssembly.id}
+              category="production"
+              label="生产附件"
+              editable={true}
+            />
           )}
 
           {/* 子项清单（仅编辑时显示） */}
@@ -1508,6 +1529,31 @@ export default function Components() {
                 }}
               />
             )}
+
+            {/* 关联图文档 */}
+            <EntityDocumentSection
+              entityType="component"
+              entityId={viewingAssembly.id}
+              entityCode={viewingAssembly.code}
+              entityName={viewingAssembly.name}
+              editable={false}
+            />
+
+            {/* CAD附件 */}
+            <ComponentAttachmentBucket
+              componentId={viewingAssembly.id}
+              category="cad"
+              label="CAD附件"
+              hideWhenEmpty={true}
+            />
+
+            {/* 生产附件 */}
+            <ComponentAttachmentBucket
+              componentId={viewingAssembly.id}
+              category="production"
+              label="生产附件"
+              hideWhenEmpty={true}
+            />
           </div>
         )}
       </Modal>

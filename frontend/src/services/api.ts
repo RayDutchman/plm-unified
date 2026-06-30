@@ -235,20 +235,20 @@ export const dashboardApi = {
 
 // 实体-图文档关联 API
 export const entityDocumentsApi = {
-  list: (entityType: 'part' | 'assembly' | 'configuration', entityId: string) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+  list: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string) => {
+    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
     return api.get(`/${base}/${entityId}/documents`);
   },
-  add: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, data: { document_id: string; category?: string; sort_order?: number }) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+  add: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string, data: { document_id: string; category?: string; sort_order?: number }) => {
+    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
     return api.post(`/${base}/${entityId}/documents`, data);
   },
-  update: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, edocId: string, data: { category?: string; sort_order?: number }) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+  update: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string, edocId: string, data: { category?: string; sort_order?: number }) => {
+    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
     return api.put(`/${base}/${entityId}/documents/${edocId}`, data);
   },
-  remove: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, edocId: string) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+  remove: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string, edocId: string) => {
+    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
     return api.delete(`/${base}/${entityId}/documents/${edocId}`);
   },
 };
