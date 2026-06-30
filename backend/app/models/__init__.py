@@ -4,6 +4,8 @@ from app.models.part import PartMaster, PartRevision, PartIteration
 from app.models.binary import BinaryResource, Geometry, Conversion
 from app.models.assembly import PartUsageLink, CADInstance
 from app.models.user_groups import UserGroup, user_group_members
+from app.models.models_document import Document, DocumentAttachment, DocumentLink, DocumentGroupLink
+from app.models.pdm import Component, ComponentAttachment
 
 __all__ = [
     "Workspace", "User",
@@ -11,4 +13,6 @@ __all__ = [
     "BinaryResource", "Geometry", "Conversion",
     "PartUsageLink", "CADInstance",
     "UserGroup", "user_group_members",
+    "Document", "DocumentAttachment", "DocumentLink", "DocumentGroupLink",
+    "Component", "ComponentAttachment",
 ]
