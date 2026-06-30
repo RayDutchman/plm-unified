@@ -26,6 +26,7 @@ from app.crud.part import (
 )
 from app.database import get_db
 from app.models import User
+from app.models.part import PartMaster
 from app.routers.auth import get_current_active_user
 from app.schemas.part import (
     CheckoutResponse,
@@ -89,17 +90,30 @@ def list_parts_endpoint(
     return result
 
 
-@router.get("/{number}", response_model=PartResponse, summary="查询单个零件")
+@router.get("/{identifier}", response_model=PartResponse, summary="查询单个零件")
 def get_part_endpoint(
-    number: str,
+    identifier: str,
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     返回零件主数据及其全部版本和迭代信息。
+    支持按编号（number）或 UUID（id）查询。
     """
-    master = get_part(db, number=number, workspace_id=workspace_id)
+    # 尝试 UUID 解析
+    try:
+        uid = uuid.UUID(identifier)
+        master = db.query(PartMaster).filter(
+            PartMaster.id == uid,
+            PartMaster.deleted_at.is_(None),
+        ).first()
+        if master:
+            return _enrich_response(db, master)
+    except ValueError:
+        pass
+    # 按 number 查
+    master = get_part(db, number=identifier, workspace_id=workspace_id)
     return _enrich_response(db, master)
 
 
