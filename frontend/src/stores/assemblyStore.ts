@@ -49,12 +49,16 @@ export interface AssemblyState {
   // 选中
   selectedId: string | null;
 
+  // 显示选项
+  showEdges: boolean;
+
   // Actions
   setWorkspaceId: (id: string) => void;
   loadInstances: (partNumber: string, version: string, token: string) => Promise<void>;
   setInstanceBuffer: (url: string, buffer: ArrayBuffer) => void;
   setInstanceError: (url: string, message: string) => void;
   selectInstance: (id: string | null) => void;
+  toggleEdges: () => void;
   reset: () => void;
 }
 
@@ -66,6 +70,7 @@ const initialState = {
   loading: false,
   error: null as string | null,
   selectedId: null as string | null,
+  showEdges: true,
 };
 
 export const useAssemblyStore = create<AssemblyState>((set, get) => ({
@@ -142,6 +147,8 @@ export const useAssemblyStore = create<AssemblyState>((set, get) => ({
   },
 
   selectInstance: (id) => set({ selectedId: id }),
+
+  toggleEdges: () => set({ showEdges: !get().showEdges }),
 
   reset: () =>
     set({
