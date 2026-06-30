@@ -124,11 +124,11 @@ async def upload_file(
             doc = db.query(Document).filter(Document.id == uuid.UUID(entity_id)).first()
             if doc:
                 folder_name = f"{doc.code}_{doc.version}"
-        elif entity_type in ("component", "components"):
-            from ..models import Component
-            comp = db.query(Component).filter(Component.id == uuid.UUID(entity_id)).first()
-            if comp:
-                folder_name = f"{comp.code}_{comp.version}"
+        elif entity_type in ("component", "components", "part", "parts"):
+            from app.models.part import PartMaster
+            pm = db.query(PartMaster).filter(PartMaster.id == uuid.UUID(entity_id)).first()
+            if pm:
+                folder_name = f"{pm.number}_A"
         result = file_storage.save_file(
             file_data,
             entity_type,
@@ -143,7 +143,7 @@ async def upload_file(
             catt_id = uuid.uuid4()
             new_catt = ComponentAttachment(
                 id=catt_id,
-                component_id=uuid.UUID(entity_id),
+                part_master_id=uuid.UUID(entity_id),
                 category=category or "cad",
                 file_name=result["filename"],
                 file_size=result["file_size"],
@@ -237,11 +237,11 @@ async def init_chunked_upload(
             doc = db.query(Document).filter(Document.id == uuid.UUID(entity_id)).first()
             if doc:
                 folder_name = f"{doc.code}_{doc.version}"
-        elif entity_type in ("component", "components"):
-            from ..models import Component
-            comp = db.query(Component).filter(Component.id == uuid.UUID(entity_id)).first()
-            if comp:
-                folder_name = f"{comp.code}_{comp.version}"
+        elif entity_type in ("component", "components", "part", "parts"):
+            from app.models.part import PartMaster
+            pm = db.query(PartMaster).filter(PartMaster.id == uuid.UUID(entity_id)).first()
+            if pm:
+                folder_name = f"{pm.number}_A"
         meta = chunked_uploader.init_upload(
             filename,
             file_size,
