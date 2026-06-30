@@ -21,7 +21,8 @@ def create_log(
     ip_address: str | None = None,
     id: uuid.UUID | None = None,
 ):
-    pass
+    from app.crud import create_log as _create_log
+    return _create_log(db, user_id, username, action, target_type, target_id, detail, ip_address, id)
 
 
 def _get_next_version(db: Session, model, code: str) -> str:

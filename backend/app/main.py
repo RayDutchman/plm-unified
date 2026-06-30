@@ -63,10 +63,10 @@ app.include_router(projects_router, prefix="/api")
 # app.include_router(dashboard_router, prefix="/api")
 # from app.routers.custom_fields import router as custom_fields_router
 # app.include_router(custom_fields_router, prefix="/api")
-# from app.routers.logs import router as logs_router
-# app.include_router(logs_router, prefix="/api")
-# from app.routers.admin import router as admin_router
-# app.include_router(admin_router, prefix="/api")
+from app.routers.logs import router as logs_router
+app.include_router(logs_router, prefix="/api")
+from app.routers.admin import router as admin_router
+app.include_router(admin_router, prefix="/api")
 # from app.routers.sync import router as sync_router
 # app.include_router(sync_router, prefix="/api")
 

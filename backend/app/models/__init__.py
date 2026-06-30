@@ -17,9 +17,11 @@ from app.models.models_configuration import (
     ConfigurationProfile, ConfigurationProfileItem, ConfigurationWorkingItem,
     ConfigurationReviewRecord, ConfigurationStatusLog,
 )
+from app.models.models_log import OperationLog
 from app.models.models_project import (
     Project, ProjectMember, ProjectTask, ProjectTaskLink, ProjectTaskComment, ProjectTaskDep,
 )
+from app.models.models_custom_field import CustomFieldDefinition, CustomFieldValue
 
 __all__ = [
     "Workspace", "User",
@@ -36,5 +38,7 @@ __all__ = [
     "ConfigurationItem", "ConfigurationItemPart", "ConfigurationItemChild",
     "ConfigurationProfile", "ConfigurationProfileItem", "ConfigurationWorkingItem",
     "ConfigurationReviewRecord", "ConfigurationStatusLog",
+    "OperationLog",
     "Project", "ProjectMember", "ProjectTask", "ProjectTaskLink", "ProjectTaskComment", "ProjectTaskDep",
+    "CustomFieldDefinition", "CustomFieldValue",
 ]
