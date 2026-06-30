@@ -17,6 +17,9 @@ from app.models.models_configuration import (
     ConfigurationProfile, ConfigurationProfileItem, ConfigurationWorkingItem,
     ConfigurationReviewRecord, ConfigurationStatusLog,
 )
+from app.models.models_project import (
+    Project, ProjectMember, ProjectTask, ProjectTaskLink, ProjectTaskComment, ProjectTaskDep,
+)
 
 __all__ = [
     "Workspace", "User",
@@ -33,4 +36,5 @@ __all__ = [
     "ConfigurationItem", "ConfigurationItemPart", "ConfigurationItemChild",
     "ConfigurationProfile", "ConfigurationProfileItem", "ConfigurationWorkingItem",
     "ConfigurationReviewRecord", "ConfigurationStatusLog",
+    "Project", "ProjectMember", "ProjectTask", "ProjectTaskLink", "ProjectTaskComment", "ProjectTaskDep",
 ]

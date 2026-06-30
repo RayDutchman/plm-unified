@@ -55,8 +55,8 @@ from app.routers.configuration import router as configuration_router
 app.include_router(configuration_router, prefix="/api")
 from app.routers.inventory import router as inventory_router
 app.include_router(inventory_router, prefix="/api")
-# from app.routers.projects import router as projects_router
-# app.include_router(projects_router, prefix="/api")
+from app.routers.projects import router as projects_router
+app.include_router(projects_router, prefix="/api")
 
 # Phase 5: 支撑层
 # from app.routers.dashboard import router as dashboard_router
