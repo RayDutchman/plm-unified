@@ -249,7 +249,7 @@ export default function Components() {
   const { sortedData, handleSort, getSortIcon } = useTableSort<Assembly>(assemblies, 'code', 'asc');
 
   // 获取部件适用的自定义字段定义
-  const componentCustomDefs = customFieldDefs.filter((d) => d.applies_to?.includes('component'));
+  const componentCustomDefs = customFieldDefs.filter((d) => d.applies_to?.includes('part'));
 
   // 筛选逻辑
   const filteredData = sortedData.filter(assembly => {
@@ -374,7 +374,7 @@ export default function Components() {
 
   const loadCustomFields = useCallback(() => {
     const localDefs = useDataStore.getState().customFieldDefs;
-    setCustomFieldDefs(localDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('component')));
+    setCustomFieldDefs(localDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('part')));
     setLoadingCustomFields(false);
   }, []);
 
@@ -740,7 +740,7 @@ export default function Components() {
     setDetailTab('basic');
     setExpandedIds(new Set());
     const allDefs = useDataStore.getState().customFieldDefs;
-    setViewingCustomDefs(allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('component')));
+    setViewingCustomDefs(allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('part')));
     await loadCustomFieldValues(assembly.id, true);
     const tree = await loadViewParts(assembly.id);
     setViewParts(tree);

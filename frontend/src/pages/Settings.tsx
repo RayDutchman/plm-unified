@@ -18,38 +18,20 @@ const FIELD_TYPES = [
 ] as const;
 
 const ENTITY_TYPES = [
-  { value: 'part,component', label: '零部件' },
+  { value: 'part', label: '零部件' },
   { value: 'document', label: '图文档' },
 ] as const;
 
 // 将后端 applies_to 数组归一化为展示用的标签列表
 function displayAppliesTo(applies_to: string[]): string[] {
-  const hasPart = applies_to.includes('part');
-  const hasComp = applies_to.includes('component');
-  const labels: string[] = [];
-  if (hasPart && hasComp) {
-    labels.push('零部件');
-  } else {
-    if (hasPart) labels.push('零件');
-    if (hasComp) labels.push('部件');
-  }
-  if (applies_to.includes('document')) labels.push('图文档');
-  return labels;
+  return applies_to.map((v) => ENTITY_TYPES.find(e => e.value === v)?.label || v);
 }
 
-// 编辑时，将归一化的标签列表转回 checkbox 选中值
+// 编辑时，将归一化的标签列表转回 checkbox 选中值（旧数据可能有 'component' 兼容处理）
 function expandAppliesTo(applies_to: string[]): string[] {
-  const result: string[] = [];
-  const hasPart = applies_to.includes('part');
-  const hasComp = applies_to.includes('component');
-  if (hasPart && hasComp) {
-    result.push('part,component');
-  } else {
-    if (hasPart) result.push('part');
-    if (hasComp) result.push('component');
-  }
-  if (applies_to.includes('document')) result.push('document');
-  return result;
+  const normalized = applies_to.includes('part') || applies_to.includes('component') ? ['part'] : [];
+  if (applies_to.includes('document')) normalized.push('document');
+  return normalized;
 }
 
 interface FieldFormData {
@@ -222,18 +204,14 @@ export default function Settings() {
       return;
     }
 
-    // applies_to 现在直接传递数组，不做字符串转换
-    // 合并值 "part,component" 展开为实际数组
-    const expandedAppliesTo = formData.applies_to.flatMap((v: string) =>
-      v === 'part,component' ? ['part', 'component'] : [v]
-    );
+    // applies_to 现在直接传递数组
     const payload = {
       name: formData.name.trim(),
       field_key: formData.field_key.trim(),
       field_type: formData.field_type,
       options: formData.options ? formData.options.split('\n').map(s => s.trim()).filter(Boolean) : [],
       is_required: formData.is_required,
-      applies_to: expandedAppliesTo,
+      applies_to: formData.applies_to,
       sort_order: formData.sort_order,
     };
 
