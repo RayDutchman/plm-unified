@@ -271,7 +271,7 @@ def _doc_detail(db, d):
     def _book_qty(line):
         if line.book_quantity is not None:
             return float(line.book_quantity)
-        if d.doc_type == "stocktake":
+        if d.doc_type == "stocktake" and d.status != "posted":
             stock = db.query(InventoryStock).filter(
                 InventoryStock.material_id == line.material_id,
                 InventoryStock.warehouse_id == d.warehouse_id,

@@ -296,19 +296,10 @@ def _add_status_log(db, doc_id, from_status, to_status, operator: User, comment=
 def _set_lines(db, doc, lines):
     db.query(InventoryDocumentLine).filter(InventoryDocumentLine.doc_id == doc.id).delete()
     for idx, ln in enumerate(lines or []):
-        book_quantity = None
-        if doc.doc_type == "stocktake":
-            stock = db.query(InventoryStock).filter(
-                InventoryStock.material_id == _uuid(ln.material_id),
-                InventoryStock.warehouse_id == doc.warehouse_id,
-                InventoryStock.batch_no == (ln.batch_no or ""),
-            ).first()
-            book_quantity = stock.quantity if stock else 0
         db.add(InventoryDocumentLine(
             doc_id=doc.id, material_id=_uuid(ln.material_id), batch_no=ln.batch_no or "",
             quantity=ln.quantity or 0, direction=ln.direction,
-            book_quantity=book_quantity, counted_quantity=ln.counted_quantity,
-            remark=ln.remark, sort_order=idx,
+            counted_quantity=ln.counted_quantity, remark=ln.remark, sort_order=idx,
         ))
 
 
