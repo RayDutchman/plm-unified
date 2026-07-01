@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { partMasterApi, type PartMasterListItem, type PartMasterDetail } from '../services/partMasterApi';
 import { customFieldsApi, assemblyPartsApi } from '../services/api';
 import type { CustomFieldDefinition, CustomFieldValue } from '../types';
@@ -59,7 +60,7 @@ export default function PartMasters() {
   const [editParts, setEditParts] = useState<any[]>([]);
   const [loadingEditParts, setLoadingEditParts] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-
+  const navigate = useNavigate();
   const componentCustomDefs = useMemo(() => {
     const allDefs = useDataStore.getState().customFieldDefs;
     return allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('part'));
@@ -609,6 +610,15 @@ export default function PartMasters() {
               {viewing.childCount > 0 && <TabBtn active={detailTab === 'bom'} onClick={() => setDetailTab('bom')}>子项清单</TabBtn>}
               {viewing.childCount === 0 && <TabBtn active={detailTab === 'bom'} onClick={() => setDetailTab('bom')}>子项清单</TabBtn>}
               <TabBtn active={detailTab === 'versions'} onClick={() => setDetailTab('versions')}>版本历史</TabBtn>
+              <div className="ml-auto" />
+              <button
+                type="button"
+                onClick={() => navigate(`/viewer?part=${encodeURIComponent(viewing.number)}&version=${encodeURIComponent(viewing.latestVersion)}`)}
+                className="px-3 py-1.5 text-xs border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50 transition-colors"
+                title="3D 装配体预览"
+              >
+                📦 3D预览
+              </button>
             </div>
 
             {detailTab === 'basic' && (
