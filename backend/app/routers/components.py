@@ -104,9 +104,7 @@ def _enrich_links(links: list, db: Session) -> list:
                 "file_name": doc.file_name,
                 "file_id": str(doc.file_id) if doc.file_id else None,
             }
-        else:
-            entry["document"] = None
-        result.append(entry)
+            result.append(entry)
     return result
 
 
