@@ -14,7 +14,7 @@ from ..database import get_db
 from ..models import User, DocumentAttachment, Document
 from ..file_storage import file_storage, chunked_uploader, MAX_FILE_SIZE, CHUNK_SIZE
 from .auth import get_current_active_user
-from ..permissions import require_permission, has_permission
+from app.permissions import require_permission, has_permission
 from ..media_token import mint_media_token, verify_media_token
 from .. import crud_groups
 from ..stp_converter import is_stp_file, convert_stp_to_gltf, get_gltf_path_for_attachment, delete_glb_cache

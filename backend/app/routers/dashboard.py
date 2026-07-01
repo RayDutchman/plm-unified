@@ -8,7 +8,7 @@ from app.models import (
     DashboardItem, DashboardFolderShare
 )
 from app.models.models_configuration import ConfigurationItem
-from app.core.permissions import require_permission, enforce_object_policy
+from app.permissions import require_permission, enforce_object_policy
 from app.crud import create_log
 
 router = APIRouter(prefix="/dashboard", tags=["用户看板"])

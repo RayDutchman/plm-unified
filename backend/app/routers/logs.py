@@ -5,7 +5,7 @@ from typing import Optional
 from app.database import get_db
 from app.models import User
 from app.crud import get_logs
-from app.core.permissions import require_permission
+from app.permissions import require_permission
 
 router = APIRouter(prefix="/logs", tags=["操作日志"])
 

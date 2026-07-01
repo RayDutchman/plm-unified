@@ -11,8 +11,7 @@ from app.schemas_inventory import (
     WarehouseCreate, WarehouseEdit, MaterialCreate, MaterialEdit, MaterialEnableFromPDM,
     DocumentCreate, DocumentEdit, DocumentListParams, ReviewAction, AssignKeeperAction, PostAction,
 )
-from app.core.permissions import require_permission
-from app.permissions.policies import enforce_object_policy
+from app.permissions import require_permission, enforce_object_policy
 
 router = APIRouter(prefix="/inventory", tags=["库存管理"])
 

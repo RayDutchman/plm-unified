@@ -17,7 +17,7 @@ from app.models.user_groups import UserGroup
 from app.models.models_document import Document, DocumentAttachment, DocumentLink, DocumentGroupLink
 from app.models.part import PartMaster
 from app.routers.auth import get_current_active_user
-from app.core.permissions import require_permission
+from app.permissions import require_permission
 from app.schemas.document import DocumentCreate, DocumentUpdate, DocumentAttachmentCreate, UpgradeRequest
 from app.crud_groups import get_user_group_ids, get_document_group_ids, document_is_accessible, enforce_document_content_access
 from app.stp_converter import is_stp_file, delete_glb_cache

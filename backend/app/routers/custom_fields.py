@@ -7,7 +7,7 @@ from app.models import User
 from app import crud_custom_field
 from app import schemas_custom_field as schemas
 from app.crud import create_log
-from app.core.permissions import require_permission
+from app.permissions import require_permission
 
 router = APIRouter(prefix="/custom-fields", tags=["自定义字段管理"])
 

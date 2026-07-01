@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import User
 from app.models.user_groups import user_group_members
 from app.crud import user as crud_user
-from app.core.permissions import require_permission
+from app.permissions import require_permission
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
 from app.schemas.user_group import UserGroupsUpdate
 

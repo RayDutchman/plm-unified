@@ -17,7 +17,7 @@ from app.models import models_configuration as models
 from app.schemas import configuration as schemas
 from app.crud import configuration as crud
 from app.crud.document import create_log
-from app.core.permissions import require_permission
+from app.permissions import require_permission
 
 router = APIRouter(prefix="/configurations", tags=["构型配置"])
 

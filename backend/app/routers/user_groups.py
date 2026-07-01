@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models import User
 from app.models.user_groups import UserGroup, user_group_members
 from app.schemas.user_group import UserGroupCreate, UserGroupUpdate, GroupMembersUpdate
-from app.core.permissions import require_permission
+from app.permissions import require_permission
 
 router = APIRouter(prefix="/user-groups", tags=["\u7528\u6237\u7ec4\u7ba1\u7406"])
 

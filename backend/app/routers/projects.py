@@ -11,7 +11,7 @@ from app.schemas_project import (
     ProjectCreate, ProjectEdit, MemberAdd,
     TaskCreate, TaskEdit, TaskStatusUpdate, TaskMove, TaskReorder, TaskLinkAdd, CommentAdd, DepCreate,
 )
-from app.core.permissions import require_permission, enforce_object_policy
+from app.permissions import require_permission, enforce_object_policy
 
 router = APIRouter(prefix="/projects", tags=["项目管理"])
 
