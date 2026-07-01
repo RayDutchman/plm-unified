@@ -30,6 +30,38 @@ def _resolve_creator(db: Session, creator_id):
     return u.real_name if u else ""
 
 
+# PartRevision.status（大写）→ 前端使用的小写枚举
+_PART_STATUS_MAP = {"WIP": "draft", "FROZEN": "frozen", "RELEASED": "released", "OBSOLETE": "obsolete"}
+
+
+def _latest_part_version_status(db: Session, part_master_id):
+    """取零件最新版本（version 字母倒序第一）的 version 与归一化 status。"""
+    from app.models.part import PartRevision
+    rev = (
+        db.query(PartRevision)
+        .filter(PartRevision.part_master_id == part_master_id, PartRevision.deleted_at.is_(None))
+        .order_by(PartRevision.version.desc())
+        .first()
+    )
+    if not rev:
+        return "", ""
+    return rev.version, _PART_STATUS_MAP.get(rev.status, (rev.status or "").lower())
+
+
+def _part_has_children(db: Session, part_master_id) -> bool:
+    """零件是否含 BOM 子项（任一版本/迭代下存在 PartUsageLink 即为部件）。"""
+    from app.models.part import PartRevision, PartIteration
+    from app.models.assembly import PartUsageLink
+    return (
+        db.query(PartUsageLink.id)
+        .join(PartIteration, PartUsageLink.parent_iteration_id == PartIteration.id)
+        .join(PartRevision, PartIteration.part_revision_id == PartRevision.id)
+        .filter(PartRevision.part_master_id == part_master_id, PartRevision.deleted_at.is_(None))
+        .first()
+        is not None
+    )
+
+
 # ════════════════════════════════════════════════════════
 # 构型项 CRUD
 # ════════════════════════════════════════════════════════
@@ -118,12 +150,15 @@ async def get_config_item(
     parts_data = []
     for p in crud.get_config_parts(db, config_id):
         entity = db.query(PartMaster).filter(PartMaster.id == p.part_id).first()
+        version, status = _latest_part_version_status(db, p.part_id) if entity else ("", "")
+        has_children = _part_has_children(db, p.part_id) if entity else False
         parts_data.append({
             "id": str(p.id), "part_type": p.part_type, "part_id": str(p.part_id),
             "is_required": p.is_required, "quantity": p.quantity, "sort_order": p.sort_order,
+            "has_children": has_children,
             "part_detail": {
                 "id": str(entity.id), "code": entity.number, "name": entity.name,
-                "spec": entity.type or "", "status": "",
+                "spec": entity.type or "", "version": version, "status": status,
             } if entity else {},
         })
 
