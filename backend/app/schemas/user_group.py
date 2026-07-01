@@ -22,3 +22,9 @@ class UserGroupUpdate(BaseModel):
 class GroupMembersUpdate(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     user_ids: List[uuid.UUID] = []
+
+
+class UserGroupsUpdate(BaseModel):
+    """设置某个用户所属的用户组。"""
+    model_config = ConfigDict(from_attributes=True)
+    group_ids: List[uuid.UUID] = []
