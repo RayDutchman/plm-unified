@@ -36,9 +36,6 @@ export function CameraController() {
   const viewTarget = useViewerStore((s) => s.viewTarget);
   const setViewTarget = useViewerStore((s) => s.setViewTarget);
   const resetViewTrigger = useViewerStore((s) => s.resetViewTrigger);
-  // P2.2 FlyTo
-  const flyToBounds = useViewerStore((s) => s.flyToBounds);
-  const clearFlyTo = useViewerStore((s) => s.clearFlyTo);
   const { camera, set, size } = useThree();
   const controlsRef = useRef<any>(null);
   const prevMode = useRef<string | null>(null);
@@ -130,29 +127,6 @@ export function CameraController() {
       elapsed: 0,
     };
   }, [resetViewTrigger]);
-
-  // P2.2 FlyTo：飞向选中零件的包围球，0.4s 动画，相机距离 = radius * 2.5
-  useEffect(() => {
-    if (!flyToBounds || !controlsRef.current) return;
-    const { center, radius } = flyToBounds;
-    const tgt = new THREE.Vector3(...center);
-    const dir = new THREE.Vector3()
-      .subVectors(camera.position, tgt)
-      .normalize();
-    // 若相机与目标过近（首次）则用当前视角方向
-    if (dir.lengthSq() < 0.001) dir.set(0, 0.5, 1).normalize();
-    const dist = Math.max(radius * 2.5, 0.1);
-    const endPos = tgt.clone().addScaledVector(dir, dist);
-    const up = bestUp(dir, camera.up);
-    anim.current = {
-      start: camera.position.clone(),
-      end: endPos,
-      up,
-      target: tgt.clone(),
-      elapsed: 0,
-    };
-    clearFlyTo();
-  }, [flyToBounds]);
 
   useFrame((_, delta) => {
     // 同步相机四元数到 store（用于 ViewCube 完美跟随）

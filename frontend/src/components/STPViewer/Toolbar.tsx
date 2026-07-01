@@ -15,8 +15,6 @@ export function Toolbar() {
   const cameraMode = useViewerStore((s) => s.cameraMode);
   const toggleCameraMode = useViewerStore((s) => s.toggleCameraMode);
   const triggerResetView = useViewerStore((s) => s.triggerResetView);
-  // P2.1 截图
-  const triggerScreenshot = useViewerStore((s) => s.triggerScreenshot);
 
   const getPlane = (axis: string) => clipPlanes.find((p) => p.axis === axis);
   const toggleClipFlip = useViewerStore((s) => s.toggleClipFlip);
@@ -115,15 +113,6 @@ export function Toolbar() {
             : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent'}`}
       >
         上色
-      </button>
-
-      {/* P2.1 截图下载 */}
-      <button
-        onClick={triggerScreenshot}
-        title="截图下载 PNG"
-        className="text-sm px-3 py-1.5 rounded-md font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent transition-colors"
-      >
-        📷
       </button>
 
       {/* Section plane sliders (右侧，3倍长) */}
