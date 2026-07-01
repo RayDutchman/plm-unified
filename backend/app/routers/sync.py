@@ -1,11 +1,19 @@
 """同步状态查询。"""
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import User
+from app.permissions import require_permission
 
 router = APIRouter(prefix="/sync", tags=["同步"])
 
 
 @router.get("/status")
-def get_sync_status():
+def get_sync_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("sync:read"))
+):
     return {
         "parts": 0,
         "assemblies": 0,

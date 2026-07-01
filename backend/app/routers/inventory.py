@@ -217,9 +217,6 @@ async def assign_keeper(doc_id: uuid.UUID, data: AssignKeeperAction, db: Session
 async def post_document(doc_id: uuid.UUID, data: PostAction = None, db: Session = Depends(get_db),
                         current_user: User = Depends(require_permission("inventory.doc:post"))):
     doc = crud_inventory.get_document(db, doc_id)
-    # 仅指定库管员或管理员可过账
-    if current_user.role != "admin" and doc.keeper_id != current_user.id:
-        raise HTTPException(status_code=403, detail="仅指定库管员可过账")
     enforce_object_policy("inventory_keeper_or_admin", current_user, doc)
     # 盘点单：先写入各行实盘数
     if data and data.counts:
