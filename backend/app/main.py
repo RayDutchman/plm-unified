@@ -48,7 +48,9 @@ app.include_router(bom_router, prefix="/api")
 
 # Phase 3: 流程层
 from app.routers.ecrs import router as ecrs_router
+from app.routers.issues import router as issues_router
 app.include_router(ecrs_router, prefix="/api")
+app.include_router(issues_router, prefix="/api")
 from app.routers.ecos import router as ecos_router
 app.include_router(ecos_router, prefix="/api")
 
