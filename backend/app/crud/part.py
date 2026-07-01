@@ -160,15 +160,21 @@ def list_parts(
     workspace_id: uuid.UUID,
     skip: int = 0,
     limit: int = 50,
+    updated_since: float | None = None,
 ) -> list[PartMaster]:
-    """列出工作空间内所有未删除的零件，分页。"""
-    return (
-        db.query(PartMaster)
-        .filter(
-            PartMaster.workspace_id == workspace_id,
-            PartMaster.deleted_at.is_(None),
+    """列出工作空间内所有未删除的零件，分页。updated_since 为 UNIX 时间戳时，包含该时间之后的已删除记录。"""
+    from datetime import datetime, timezone
+    query = db.query(PartMaster).filter(PartMaster.workspace_id == workspace_id)
+    if updated_since is not None:
+        since_dt = datetime.fromtimestamp(updated_since, tz=timezone.utc)
+        query = query.filter(
+            (PartMaster.updated_at >= since_dt)
+            | (PartMaster.deleted_at >= since_dt)
         )
-        .order_by(PartMaster.number)
+    else:
+        query = query.filter(PartMaster.deleted_at.is_(None))
+    return (
+        query.order_by(PartMaster.number)
         .offset(skip)
         .limit(limit)
         .all()

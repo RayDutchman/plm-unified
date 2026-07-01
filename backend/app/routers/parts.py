@@ -81,14 +81,24 @@ def list_parts_endpoint(
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    updated_since: float | None = Query(None),
+    brief: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """
     列出工作空间内所有未删除的零件，附最新版本状态。
+    updated_since: UNIX 时间戳，增量同步用（包含已删除）。
+    brief: 仅返回 id/number/name/updated_at/deleted_at。
     """
     from app.models.part import PartRevision  # 避免循环导入
-    masters = list_parts(db, workspace_id=workspace_id, skip=skip, limit=limit)
+    masters = list_parts(db, workspace_id=workspace_id, skip=skip, limit=limit, updated_since=updated_since)
+    if brief:
+        return [{
+            "id": str(m.id), "number": m.number, "name": m.name,
+            "updated_at": m.updated_at.isoformat() if m.updated_at else None,
+            "deleted_at": m.deleted_at.isoformat() if m.deleted_at else None,
+        } for m in masters]
     result = []
     for m in masters:
         # 取最新版本（version 字母倒序取第一）
