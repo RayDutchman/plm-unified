@@ -5,14 +5,13 @@ import type { ECRListParams, ECRCreateData } from '../types';
 /** 需要自动注入 workspace_id 的 API 路径前缀 */
 const WS_API_PREFIXES = ['/parts', '/iterations', '/instances', '/nativecad', '/conversion', '/geometry', '/bom', '/issues', '/components'];
 
-/** 集中获取当前 workspace_id，兼容后端 snake_case / auth/me 返回 workspace_id */
+/** 集中获取当前 workspace_id，缺失时抛出明确错误 */
 export function getWorkspaceId(): string {
-  const user = useAuthStore.getState().user as any;
-  const wsId = user?.workspaceId || user?.workspace_id;
-  if (!wsId) {
-    throw new Error('[workspace] 当前用户缺少 workspaceId，请检查登录响应 /auth/me');
+  const user = useAuthStore.getState().user;
+  if (!user?.workspace_id) {
+    throw new Error('[workspace] 当前用户缺少 workspace_id，请检查登录响应 /auth/me');
   }
-  return String(wsId);
+  return user.workspace_id;
 }
 
 const api = axios.create({
