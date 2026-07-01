@@ -212,9 +212,8 @@ class SyncService {
       }
     }
 
-    // Start 10s polling
-    this.poll();
-    this.timer = setInterval(() => this.poll(), 10000);
+    // Polling disabled — avoid 401 floods on page load
+    // Manual sync via header button still works
   }
 
   stop() {
