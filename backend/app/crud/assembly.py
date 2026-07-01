@@ -289,29 +289,6 @@ def _get_latest_checked_in_iteration(
         if iteration:
             return iteration
 
-    # fallback：无已签入迭代时，取 WIP 版本的最新迭代（CATIA sync 场景）
-    for status_priority in ("RELEASED", "WIP"):
-        revision = (
-            db.query(PartRevision)
-            .filter(
-                PartRevision.part_master_id == master.id,
-                PartRevision.status == status_priority,
-                PartRevision.deleted_at.is_(None),
-            )
-            .order_by(PartRevision.version.desc())
-            .first()
-        )
-        if not revision:
-            continue
-        iteration = (
-            db.query(PartIteration)
-            .filter(PartIteration.part_revision_id == revision.id)
-            .order_by(PartIteration.iteration.desc())
-            .first()
-        )
-        if iteration:
-            return iteration
-
     return None
 
 
