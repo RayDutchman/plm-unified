@@ -1,8 +1,6 @@
-"""权限矩阵校验。从 permissions/permissions.json 加载。"""
+"""权限矩阵校验。权限映射来自随代码打包的 app/permissions/_generated.py。"""
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -14,11 +12,11 @@ _permissions: dict[str, list[str]] = {}
 _OBJECT_POLICY_FUNCS: dict = {}
 
 def _load_permissions() -> dict[str, list[str]]:
-    path = Path(__file__).parent.parent.parent / "permissions" / "permissions.json"
-    if not path.exists():
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    # 权限矩阵由 tools/gen_permissions.py 生成到 app/permissions/_generated.py，
+    # 随 app 目录一起打进镜像、始终存在；不再读取 app 目录外的 permissions.json
+    # （该文件不会被 Docker COPY 进镜像，导致容器内加载为空、非 admin 用户全被 403）。
+    from app.permissions._generated import PERMISSIONS
+    return dict(PERMISSIONS)
 
 
 def register_policy(name: str):
