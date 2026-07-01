@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDataStore } from '../stores/data';
 import { useAuthStore } from '../stores/auth';
-import api, { assembliesApi } from '../services/api';
+import api, { assembliesApi, getWorkspaceId } from '../services/api';
 import { bomApi } from '../services/api';
 import { partMasterApi } from '../services/partMasterApi';
 import { Modal } from './Modal';
@@ -109,7 +109,7 @@ export default function AssemblyPartPicker({
 
     // 计算祖先链：调用后端接口查询所有父项 PartMaster ID
     if (currentAssemblyId) {
-      const wsId = useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001';
+      const wsId = getWorkspaceId();
       assembliesApi.list({ page_size: 1, workspace_id: wsId } as any).then(() => {
         api.get(`/parts/${encodeURIComponent(currentAssemblyId)}/parents`, { params: { workspace_id: wsId } })
           .then(r => {

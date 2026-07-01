@@ -40,6 +40,26 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     return current_user
 
 
+def require_workspace(ws_param_name: str = "workspace_id"):
+    """校验 JWT token 中的 workspace_id 与请求参数一致，实现多工作空间隔离"""
+    from fastapi import Request
+
+    async def checker(
+        request: Request,
+        current_user: User = Depends(get_current_active_user),
+    ) -> User:
+        # 从 query params 或 body 中提取 workspace_id
+        q_ws = request.query_params.get(ws_param_name)
+        if not q_ws:
+            # 部分端点 workspace_id 在 body 中（如 POST /api/parts）
+            q_ws = request.path_params.get(ws_param_name)
+        if q_ws and q_ws != str(current_user.workspace_id):
+            raise HTTPException(status_code=403, detail="无权访问该工作空间的数据")
+        return current_user
+
+    return checker
+
+
 def require_role(roles):
     async def checker(current_user: User = Depends(get_current_active_user)) -> User:
         if current_user.role not in roles:

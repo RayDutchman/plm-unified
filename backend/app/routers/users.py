@@ -26,7 +26,8 @@ async def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("users:read")),
 ):
-    return crud_user.get_users(db, skip=skip, limit=limit)
+    """列出当前工作空间的用户（按 workspace_id 过滤）"""
+    return crud_user.get_users(db, skip=skip, limit=limit, workspace_id=current_user.workspace_id)
 
 
 @router.post("/", response_model=UserResponse)
