@@ -365,6 +365,7 @@ export default function EntityDocumentSection({ entityType, entityId, editable, 
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {docs.map((ed) => {
+                  if (!ed.document) return null;
                   const vals = docFieldValues[ed.document_id] || {};
                   const isAccessible = (ed.document as any).accessible !== false;
                   return (
