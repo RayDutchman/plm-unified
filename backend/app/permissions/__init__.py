@@ -7,7 +7,7 @@ def has_permission(user: User, perm: str) -> bool:
     allowed = PERMISSIONS.get(perm)
     if allowed is None:
         raise KeyError(f"Unknown permission: {perm}")
-    return user.role in allowed
+    return user.role in allowed or user.role == "admin"
 
 
 def require_permission(perm: str):
