@@ -38,6 +38,11 @@ def _eco_owner_or_admin(user, eco, **_) -> bool:
     return _is_admin(user) or eco.creator_id == user.id
 
 
+@register_policy("eco_approver_or_admin")
+def _eco_approver_or_admin(user, eco, *, reviewer_ids=None, **_) -> bool:
+    return _is_admin(user) or (reviewer_ids is not None and user.id in reviewer_ids)
+
+
 @register_policy("ecr_approver_or_admin")
 def _ecr_approver_or_admin(user, ecr, *, reviewer_ids=None, **_) -> bool:
     return _is_admin(user) or (reviewer_ids is not None and user.id in reviewer_ids)
