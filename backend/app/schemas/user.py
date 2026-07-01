@@ -35,7 +35,9 @@ class UserUpdate(BaseModel):
 
 
 class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True, alias_generator=_to_camel, populate_by_name=True)
+    # 前端用户管理 / 审批人·抄送选择等均按 snake_case 读取用户字段（real_name、created_at 等），
+    # 故响应不启用 camelCase alias，保持 snake_case 输出与前端一致。
+    model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     workspace_id: Optional[uuid.UUID] = None
     username: str

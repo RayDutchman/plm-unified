@@ -4,9 +4,11 @@ import uuid
 
 from app.database import get_db
 from app.models import User
+from app.models.user_groups import user_group_members
 from app.crud import user as crud_user
 from app.core.permissions import require_permission
 from app.schemas.user import UserCreate, UserUpdate, UserResponse
+from app.schemas.user_group import UserGroupsUpdate
 
 router = APIRouter(prefix="/users", tags=["用户管理"])
 
@@ -78,3 +80,37 @@ async def delete_user(
     if not crud_user.delete_user(db, user_id):
         raise HTTPException(status_code=404, detail="用户不存在")
     return {"message": "用户已删除"}
+
+
+@router.get("/{user_id}/groups")
+async def get_user_groups(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("user_groups:read")),
+):
+    """查询某个用户所属的用户组 ID 列表。"""
+    rows = db.query(user_group_members.c.group_id).filter(
+        user_group_members.c.user_id == user_id
+    ).all()
+    return {"group_ids": [r[0] for r in rows]}
+
+
+@router.put("/{user_id}/groups")
+async def set_user_groups(
+    user_id: uuid.UUID,
+    body: UserGroupsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("user_groups:manage")),
+):
+    """设置某个用户所属的用户组（整表替换）。"""
+    if not db.query(User).filter(User.id == user_id).first():
+        raise HTTPException(status_code=404, detail="用户不存在")
+    db.execute(user_group_members.delete().where(user_group_members.c.user_id == user_id))
+    gids = set(body.group_ids)
+    if gids:
+        db.execute(
+            user_group_members.insert(),
+            [{"user_id": user_id, "group_id": gid} for gid in gids],
+        )
+    db.commit()
+    return {"group_ids": list(gids)}
