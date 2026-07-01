@@ -196,6 +196,7 @@ async def get_document(
     d = db.query(Document).filter(Document.id == doc_id).first()
     if not d:
         raise HTTPException(status_code=404, detail="图文档不存在")
+    enforce_document_content_access(db, current_user, d)
     creator_name = ""
     if d.creator_id:
         creator = db.query(UserModel).filter(UserModel.id == d.creator_id).first()
@@ -406,6 +407,9 @@ async def list_attachments(
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(require_permission("documents.attachment:download")),
 ):
+    doc = db.query(Document).filter(Document.id == doc_id).first()
+    if doc:
+        enforce_document_content_access(db, current_user, doc)
     atts = (
         db.query(DocumentAttachment)
         .filter(DocumentAttachment.document_id == doc_id)
