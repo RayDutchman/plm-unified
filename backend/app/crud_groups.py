@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models_document import DocumentGroupLink, Document, DocumentAttachment
 from app.models.user_groups import user_group_members as ugm_table
+from app.permissions import check_object_policy, enforce_object_policy
 
 
 def get_user_group_ids(db: Session, user_id) -> set:
@@ -16,22 +17,20 @@ def get_document_group_ids(db: Session, document_id) -> set:
     return {r[0] for r in rows}
 
 
-def _document_content_accessible(user_group_ids: set, doc_group_ids: set) -> bool:
-    if not doc_group_ids:
-        return True
-    return bool(user_group_ids & doc_group_ids)
-
-
 def document_is_accessible(db: Session, user, document) -> bool:
-    return _document_content_accessible(
-        get_user_group_ids(db, user.id),
-        get_document_group_ids(db, document.id),
+    return check_object_policy(
+        "document_content_access", user, document,
+        user_group_ids=get_user_group_ids(db, user.id),
+        doc_group_ids=get_document_group_ids(db, document.id),
     )
 
 
 def enforce_document_content_access(db: Session, user, document) -> None:
-    if not document_is_accessible(db, user, document):
-        raise HTTPException(status_code=403, detail="无权访问该图文档内容")
+    enforce_object_policy(
+        "document_content_access", user, document,
+        user_group_ids=get_user_group_ids(db, user.id),
+        doc_group_ids=get_document_group_ids(db, document.id),
+    )
 
 
 def enforce_attachment_content_access(db: Session, user, attachment_id) -> None:

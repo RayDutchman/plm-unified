@@ -36,6 +36,10 @@ def _resolve_group_names(db: Session, gids: set) -> list:
 
 
 def _check_accessible(user, doc, user_group_ids: set, doc_groups: set) -> bool:
+    if user.role == "admin":
+        return True
+    if getattr(doc, "creator_id", None) == user.id:
+        return True
     if not doc_groups:
         return True
     return bool(user_group_ids & doc_groups)
