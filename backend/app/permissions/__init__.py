@@ -4,20 +4,17 @@ from app.models import User
 
 
 def has_permission(user: User, perm: str) -> bool:
-    allowed = PERMISSIONS.get(perm)
-    if allowed is None:
-        raise KeyError(f"Unknown permission: {perm}")
+    allowed = PERMISSIONS.get(perm, [])
     return user.role in allowed or user.role == "admin"
 
 
 def require_permission(perm: str):
-    if perm not in PERMISSIONS:
-        raise KeyError(f"Unknown permission: {perm}")
     from fastapi import Depends, HTTPException
     from app.routers.auth import get_current_active_user
 
     async def checker(current_user: User = Depends(get_current_active_user)) -> User:
-        if current_user.role not in PERMISSIONS[perm] and current_user.role != "admin":
+        allowed = PERMISSIONS.get(perm, [])
+        if current_user.role not in allowed and current_user.role != "admin":
             raise HTTPException(status_code=403, detail="权限不足")
         return current_user
     return checker
