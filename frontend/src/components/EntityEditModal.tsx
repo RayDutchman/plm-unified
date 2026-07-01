@@ -50,7 +50,7 @@ export default function EntityEditModal({ open, entityType, entityId, entityCode
   const [pickerTargetId, setPickerTargetId] = useState<string | null>(null);
 
   const api = entityType === 'assembly' ? assembliesApi : partsApi;
-  const cfType = entityType === 'assembly' ? 'component' : 'part';
+  const cfType = entityType === 'assembly' ? 'assembly' : 'part';
 
   const loadEditParts = useCallback(async (assemblyId: string) => {
     setLoadingEditParts(true);

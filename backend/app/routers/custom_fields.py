@@ -124,8 +124,8 @@ async def get_values_batch(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("custom_field.value:read"))
 ):
-    if type not in ('part', 'component', 'document'):
-        raise HTTPException(status_code=400, detail="type 必须为 part、component 或 document")
+    if type not in ('part', 'component', 'assembly', 'document'):
+        raise HTTPException(status_code=400, detail="type 必须为 part、component/assembly 或 document")
 
     entity_ids = [id.strip() for id in ids.split(',') if id.strip()]
     if not entity_ids:
@@ -142,8 +142,8 @@ async def get_values(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("custom_field.value:read"))
 ):
-    if entity_type not in ('part', 'component', 'document'):
-        raise HTTPException(status_code=400, detail="entity_type 必须为 part、component 或 document")
+    if entity_type not in ('part', 'component', 'assembly', 'document'):
+        raise HTTPException(status_code=400, detail="entity_type 必须为 part、component/assembly 或 document")
     results = crud_custom_field.get_custom_field_values(db, entity_type, entity_id)
     return [_value_response(val, field_def) for val, field_def in results]
 
@@ -157,8 +157,8 @@ async def set_values(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("custom_field.value:write"))
 ):
-    if entity_type not in ('part', 'component', 'document'):
-        raise HTTPException(status_code=400, detail="entity_type 必须为 part、component 或 document")
+    if entity_type not in ('part', 'component', 'assembly', 'document'):
+        raise HTTPException(status_code=400, detail="entity_type 必须为 part、component/assembly 或 document")
     crud_custom_field.assert_entity_editable(db, entity_type, entity_id, current_user.role)
     crud_custom_field.set_custom_field_values(db, entity_type, entity_id, batch.values)
     ip = request.client.host if request.client else None

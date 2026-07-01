@@ -89,6 +89,15 @@ class PartCreate(_RequestBase):
     description: Optional[str] = Field(None, description="首个版本的描述（可选）")
 
 
+class UsageLinkBriefSchema(BaseModel):
+    component_number: str = ""
+    component_name: str = ""
+    amount: float = 1.0
+    unit: Optional[str] = None
+
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+
 class PartResponse(_OrmBase):
     """零件完整信息，含所有版本和迭代。"""
     id: uuid.UUID
@@ -102,6 +111,12 @@ class PartResponse(_OrmBase):
     updated_at: datetime
     deleted_at: Optional[datetime] = None
     revisions: list[RevisionResponse] = []
+    latest_version: Optional[str] = None
+    latest_status: Optional[str] = None
+    checkout_user_id: Optional[uuid.UUID] = None
+    is_assembly: bool = False
+    child_count: int = 0
+    usage_links: list[UsageLinkBriefSchema] = []
 
 
 class PartListItem(_OrmBase):

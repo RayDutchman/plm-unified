@@ -15,7 +15,7 @@ import DocumentDetailContent from './DocumentDetailContent';
    ---------------------------------------------------------------- */
 
 interface EntityDocumentSectionProps {
-  entityType: 'part' | 'assembly' | 'component' | 'configuration';
+  entityType: 'part' | 'assembly' | 'configuration';
   entityId: string;
   editable: boolean;
   entityCode?: string;

@@ -167,7 +167,7 @@ export function ECODetailModal({ ecoId, onClose, onRefresh, executionMode }: Pro
       setNestedData(r.data);
       // 加载自定义字段定义
       const allDefs = useDataStore.getState().customFieldDefs;
-      const cfType = entityType === 'assembly' ? 'component' : 'part';
+      const cfType = entityType === 'assembly' ? 'assembly' : 'part';
       const defs = allDefs.filter((d: any) => d.applies_to?.includes(cfType));
       setNestedCustomDefs(defs);
       // 加载自定义字段值

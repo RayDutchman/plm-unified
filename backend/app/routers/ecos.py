@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import User, Component, PartMaster, PartRevision
+from app.models import User, PartMaster, PartRevision
 from app.models.models_eco import ECO as ECOModel, ECOExecutionItem, ECOReviewRecord, ECOStatusLog
 from app.routers.auth import get_current_active_user
 from app.schemas.eco import (
@@ -83,29 +83,15 @@ def _build_eco_detail(db: Session, eco: ECOModel) -> dict:
     for ei in execution_items:
         entity_version = ei.entity_version or ""
         if ei.entity_id:
-            if ei.entity_type == "part":
-                ent = db.query(PartMaster).filter(PartMaster.id == ei.entity_id).first()
-                if ent:
-                    entity_version = entity_version or ""
-            else:
-                ent = db.query(Component).filter(Component.id == ei.entity_id).first()
-                if ent:
-                    entity_version = ent.version or ""
+            ent = db.query(PartMaster).filter(PartMaster.id == ei.entity_id).first()
+            if ent:
+                entity_version = entity_version or ""
 
         new_entity_status = None
         if ei.new_entity_id:
-            if ei.entity_type == "part":
-                new_ent = db.query(PartRevision).filter(PartRevision.id == ei.new_entity_id).first()
-                if new_ent:
-                    new_entity_status = new_ent.status
-                else:
-                    new_ent = db.query(PartMaster).filter(PartMaster.id == ei.new_entity_id).first()
-                    if new_ent:
-                        new_entity_status = ""
-            else:
-                new_ent = db.query(Component).filter(Component.id == ei.new_entity_id).first()
-                if new_ent:
-                    new_entity_status = new_ent.status
+            new_ent = db.query(PartRevision).filter(PartRevision.id == ei.new_entity_id).first()
+            if new_ent:
+                new_entity_status = new_ent.status
 
         execution_item_list.append({
             "id": str(ei.id), "source": ei.source, "entity_type": ei.entity_type,
@@ -462,10 +448,7 @@ async def manual_upgrade_item(
     if not item.entity_id:
         raise HTTPException(status_code=400, detail="执行项缺少 entity_id")
 
-    if item.entity_type == "part":
-        entity = db.query(PartMaster).filter(PartMaster.id == item.entity_id).first()
-    else:
-        entity = db.query(Component).filter(Component.id == item.entity_id).first()
+    entity = db.query(PartMaster).filter(PartMaster.id == item.entity_id).first()
     if not entity:
         raise HTTPException(status_code=404, detail="实体不存在")
 
@@ -495,10 +478,7 @@ async def manual_revert_item(
     if not target_entity_id:
         raise HTTPException(status_code=400, detail="尚未执行升版，无需还原")
 
-    if item.entity_type == "part":
-        new_entity = db.query(PartRevision).filter(PartRevision.id == target_entity_id).first()
-    else:
-        new_entity = db.query(Component).filter(Component.id == target_entity_id).first()
+    new_entity = db.query(PartRevision).filter(PartRevision.id == target_entity_id).first()
 
     if not new_entity:
         item.new_entity_id = None
@@ -507,18 +487,15 @@ async def manual_revert_item(
         db.commit()
         return {"detail": "已还原"}
 
-    if isinstance(new_entity, PartRevision):
-        new_entity.status = "WIP"
+    if new_entity.status == "RELEASED":
+        raise HTTPException(status_code=400, detail="已发布的零部件不可还原")
+    if new_entity.status == "WIP":
+        db.delete(new_entity)
+        item.new_entity_id = None
+        item.new_version = None
+        item.detail = {**(item.detail or {}), "new_entity_id": "", "new_version": ""}
     else:
-        if new_entity.status == "released":
-            raise HTTPException(status_code=400, detail="已发布的零部件不可还原")
-        if new_entity.status == "draft":
-            db.delete(new_entity)
-            item.new_entity_id = None
-            item.new_version = None
-            item.detail = {**(item.detail or {}), "new_entity_id": "", "new_version": ""}
-        else:
-            new_entity.status = "draft"
+        new_entity.status = "WIP"
 
     db.commit()
     return {"detail": "已还原"}

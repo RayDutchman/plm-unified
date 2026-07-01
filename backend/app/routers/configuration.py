@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db
-from app.models import Component, Document
+from app.models import Document, PartMaster
 from app.models import models_configuration as models
 from app.schemas import configuration as schemas
 from app.crud import configuration as crud
@@ -117,13 +117,13 @@ async def get_config_item(
     # 关联零部件
     parts_data = []
     for p in crud.get_config_parts(db, config_id):
-        entity = db.query(Component).filter(Component.id == p.part_id).first()
+        entity = db.query(PartMaster).filter(PartMaster.id == p.part_id).first()
         parts_data.append({
             "id": str(p.id), "part_type": p.part_type, "part_id": str(p.part_id),
             "is_required": p.is_required, "quantity": p.quantity, "sort_order": p.sort_order,
             "part_detail": {
-                "id": str(entity.id), "code": entity.code, "name": entity.name,
-                "version": entity.version, "spec": entity.spec or "", "status": entity.status,
+                "id": str(entity.id), "code": entity.number, "name": entity.name,
+                "spec": entity.type or "", "status": "",
             } if entity else {},
         })
 
@@ -863,7 +863,6 @@ async def update_profile_item(
 
 
 def _format_profile_item(item, entity_map: dict = None) -> dict:
-    """格式化清单项响应"""
     entity = entity_map.get(str(item.item_id)) if entity_map else None
     result = {
         "id": str(item.id),
@@ -873,8 +872,6 @@ def _format_profile_item(item, entity_map: dict = None) -> dict:
         "item_id": str(item.item_id),
         "item_code": item.item_code or "",
         "item_name": item.item_name or "",
-        "item_version": entity.version if entity and hasattr(entity, 'version') else "",
-        "item_status": entity.status if entity and hasattr(entity, 'status') else "",
         "is_required": item.is_required,
         "is_selected": item.is_selected,
         "quantity": getattr(item, "quantity", 1) or 1,
@@ -886,22 +883,12 @@ def _format_profile_item(item, entity_map: dict = None) -> dict:
 
 
 def _build_entity_map(db: Session, items: list) -> dict:
-    """批量查找零部件版本和状态"""
-    from app.models import Component
-    part_ids = []
-    assembly_ids = []
-    for item in items:
-        if item.item_type == "part":
-            part_ids.append(item.item_id)
-        else:
-            assembly_ids.append(item.item_id)
+    from app.models import PartMaster
     entity_map = {}
-    if part_ids:
-        for p in db.query(Component).filter(Component.id.in_(part_ids)).all():
+    all_item_ids = [item.item_id for item in items]
+    if all_item_ids:
+        for p in db.query(PartMaster).filter(PartMaster.id.in_(all_item_ids)).all():
             entity_map[str(p.id)] = p
-    if assembly_ids:
-        for a in db.query(Component).filter(Component.id.in_(assembly_ids)).all():
-            entity_map[str(a.id)] = a
     return entity_map
 
 

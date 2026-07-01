@@ -742,7 +742,7 @@ interface BOMRow {
 }
 
 interface BOMEntityRef {
-  type: 'part' | 'component';
+  type: 'part' | 'assembly';
   id: string;
 }
 
@@ -759,7 +759,7 @@ async function gatherBOMTree(
 
     for (const item of items) {
       const detail = item.child_detail;
-      refs.push({ type: item.childType as 'part' | 'component', id: detail?.id || '' });
+      refs.push({ type: item.childType as 'part' | 'assembly', id: detail?.id || '' });
       rows.push({
         层级: level,
         类型: item.childType === 'part' ? '零件' : '部件',
@@ -803,11 +803,11 @@ export async function exportAssembliesToFolder(dirHandle?: FileSystemDirectoryHa
     startIn: 'downloads',
   });
 
-  const defs = getCustomFieldDefs('component');
+  const defs = getCustomFieldDefs('assembly');
   const asmIds = assemblies.map((a) => a.id);
   const [cfValuesMap, docMap] = await Promise.all([
     defs.length > 0
-      ? loadCustomFieldValues('component', asmIds)
+      ? loadCustomFieldValues('assembly', asmIds)
       : Promise.resolve(new Map()),
     loadEntityDocuments('assembly', asmIds),
   ]);
@@ -925,7 +925,7 @@ export async function exportSingleAssemblyBOM(assemblyId: string): Promise<void>
 
   const asmDefs = getCustomFieldDefs('component');
   const [cfValuesMap, docMap, bomResult] = await Promise.all([
-    asmDefs.length > 0 ? loadCustomFieldValues('component', [asm.id]) : Promise.resolve(new Map()),
+    asmDefs.length > 0 ? loadCustomFieldValues('assembly', [asm.id]) : Promise.resolve(new Map()),
     loadEntityDocuments('assembly', [asm.id]),
     gatherBOMTree(asm.id),
   ]);
@@ -983,13 +983,13 @@ export async function exportSingleAssemblyBOM(assemblyId: string): Promise<void>
       ? loadCustomFieldValues('part', partIds)
       : Promise.resolve(new Map()),
     componentIds.length > 0 && asmDefs.length > 0
-      ? loadCustomFieldValues('component', componentIds)
+      ? loadCustomFieldValues('assembly', componentIds)
       : Promise.resolve(new Map()),
   ]);
 
   // 构建 BOM 行 → 实体信息的索引
   const entityInfo: { type: string; id: string }[] = [
-    { type: 'component', id: asm.id }, // selfRow
+    { type: 'assembly', id: asm.id }, // selfRow
     ...bomRefs.map(r => ({ type: r.type, id: r.id })),
   ];
 
@@ -1007,7 +1007,7 @@ export async function exportSingleAssemblyBOM(assemblyId: string): Promise<void>
     };
 
     // 填充该实体类型的自定义字段
-    const info = entityInfo[idx] || { type: 'component', id: '' };
+    const info = entityInfo[idx] || { type: 'assembly', id: '' };
     const defsForType = info.type === 'part' ? partDefs : asmDefs;
     const cfMap = info.type === 'part' ? partCfMap : compCfMap;
     if (info.id && defsForType.length > 0) {
@@ -1112,7 +1112,7 @@ export async function previewAssembliesImport(dirHandle?: FileSystemDirectoryHan
   const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws1);
   if (rawRows.length === 0) throw new Error('Excel 中无数据');
 
-  const defs = getCustomFieldDefs('component');
+  const defs = getCustomFieldDefs('assembly');
 
   // 已存在映射
   const existingMap = new Map<string, Assembly>();
@@ -1262,7 +1262,7 @@ export async function executeAssembliesImport(
               .filter(([, v]) => v !== null && v !== '' && v !== undefined)
               .map(([fieldId, value]) => ({ field_id: fieldId, value }));
             if (fieldValues.length > 0) {
-              await customFieldsApi.setValues('component', existing.id, fieldValues);
+              await customFieldsApi.setValues('assembly', existing.id, fieldValues);
             }
           }
         }
@@ -1374,7 +1374,7 @@ export async function executeAssembliesImport(
 
           // 5. 添加子项
           await assemblyPartsApi.add(parentId, {
-            child_type: isPart ? 'part' : 'component',
+            child_type: isPart ? 'part' : 'assembly',
             child_id: childId,
             quantity,
           });
@@ -1746,7 +1746,7 @@ export async function exportCustomFieldDefs(dirHandle?: FileSystemDirectoryHandl
      选项: (d.options || []).join('_'),
      是否必填: d.is_required ? '是' : '否',
      适用类型: (Array.isArray(d.applies_to) ? d.applies_to : [d.applies_to])
-       .map((t: string) => t === 'part' ? '零件' : t === 'component' ? '部件' : '图文档')
+       .map((t: string) => t === 'part' ? '零件' : t === 'assembly' ? '部件' : '图文档')
        .join('_'),
     排序: d.sort_order,
   }));
@@ -1812,7 +1812,7 @@ export async function importCustomFieldDefs(file: File): Promise<{ created: numb
 
     const appliesToRaw = String(row['适用类型'] || '');
     const appliesToMap: Record<string, string> = {
-      '零件': 'part', '部件': 'component', '图文档': 'document',
+      '零件': 'part', '部件': 'assembly', '图文档': 'document',
     };
     const appliesTo = appliesToRaw
       ? appliesToRaw.split('_').map(s => appliesToMap[s.trim()] || s.trim()).filter(Boolean)

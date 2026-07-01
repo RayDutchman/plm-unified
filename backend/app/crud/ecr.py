@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from datetime import datetime, timezone
 
 from app.models.models_ecr import ECR, ECRAffectedItem, ECRReviewRecord, ECRStatusLog
-from app.models import User, Component, PartMaster
+from app.models import User, PartMaster
 from app.schemas.ecr import ECRCreate, ECRUpdate, ECRListParams, ECRAffectedItemCreate
 
 _ALLOWED_TRANSITIONS = {
@@ -64,17 +64,11 @@ def _build_reviewers_json(db: Session, reviewer_items: list) -> list:
 
 def _lookup_entity(db: Session, entity_type: str, entity_id: uuid.UUID):
     code, name, version = "", "", ""
-    if entity_type in ("part",):
+    if entity_type in ("part", "component", "assembly"):
         entity = db.query(PartMaster).filter(PartMaster.id == entity_id).first()
         if entity:
             code = entity.number or ""
             name = entity.name or ""
-    elif entity_type in ("component", "assembly"):
-        entity = db.query(Component).filter(Component.id == entity_id).first()
-        if entity:
-            code = entity.code or ""
-            name = entity.name or ""
-            version = entity.version or ""
     return code, name, version
 
 

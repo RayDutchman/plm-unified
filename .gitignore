@@ -23,6 +23,7 @@ frontend/.env.local
 
 # Docker
 docker/data/
+plm_data/
 
 # IDE
 .vscode/

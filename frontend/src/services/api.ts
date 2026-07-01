@@ -102,16 +102,16 @@ export const partsApi = {
     api.get('/parts/export', { params, responseType: 'blob' }),
 };
 
-// 部件 API
+// 部件 API（统一使用 PartMaster 端点，适配旧接口格式）
 export const assembliesApi = {
   list: (params?: { page?: number; page_size?: number; search?: string; status?: string; brief?: boolean; updated_since?: number; top_level?: boolean }) =>
-    api.get('/assemblies/', { params }),
-  get: (id: string) => api.get(`/assemblies/${id}`),
-  create: (data: unknown) => api.post('/assemblies/', data),
-  update: (id: string, data: unknown) => api.put(`/assemblies/${id}`, data),
-  delete: (id: string) => api.delete(`/assemblies/${id}`),
-  upgrade: (id: string, note?: string) => api.post(`/assemblies/${id}/upgrade`, { note }),
-  versions: (id: string) => api.get(`/assemblies/${id}/versions`),
+    api.get('/parts', { params: { ...params, workspace_id: useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001' } }),
+  get: (id: string) => api.get(`/parts/${encodeURIComponent(id)}`, { params: { workspace_id: useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001' } }),
+  create: (data: unknown) => api.post('/parts', data),
+  update: (id: string, data: unknown) => api.put(`/parts/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => api.delete(`/parts/${encodeURIComponent(id)}`),
+  upgrade: (id: string, note?: string) => api.post(`/parts/${encodeURIComponent(id)}/upgrade`, { note }),
+  versions: (id: string) => api.get(`/parts/${encodeURIComponent(id)}/versions`),
   exportBOM: (id: string) =>
     api.get(`/assemblies/${id}/bom/export`, { responseType: 'blob' }),
 };
@@ -235,20 +235,20 @@ export const dashboardApi = {
 
 // 实体-图文档关联 API
 export const entityDocumentsApi = {
-  list: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string) => {
-    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
+  list: (entityType: 'part' | 'assembly' | 'configuration', entityId: string) => {
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.get(`/${base}/${entityId}/documents`);
   },
-  add: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string, data: { document_id: string; category?: string; sort_order?: number }) => {
-    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
+  add: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, data: { document_id: string; category?: string; sort_order?: number }) => {
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.post(`/${base}/${entityId}/documents`, data);
   },
-  update: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string, edocId: string, data: { category?: string; sort_order?: number }) => {
-    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
+  update: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, edocId: string, data: { category?: string; sort_order?: number }) => {
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.put(`/${base}/${entityId}/documents/${edocId}`, data);
   },
-  remove: (entityType: 'part' | 'assembly' | 'component' | 'configuration', entityId: string, edocId: string) => {
-    const base = entityType === 'part' ? 'parts' : (entityType === 'assembly' || entityType === 'component') ? 'assemblies' : 'configurations/items';
+  remove: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, edocId: string) => {
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.delete(`/${base}/${entityId}/documents/${edocId}`);
   },
 };
@@ -261,17 +261,17 @@ export const attachmentApi = {
 };
 
 // 部件附件 API
-export type ComponentAttachment = {
+export type PartAttachment = {
   id: string;
   file_name: string;
   file_size: number;
 };
 
-export const componentAttachmentsApi = {
-  list: (componentId: string, category: string) =>
-    api.get<ComponentAttachment[]>(`/components/${componentId}/attachments`, { params: { category } }),
-  remove: (componentId: string, attachmentId: string) =>
-    api.delete(`/components/${componentId}/attachments/${attachmentId}`),
+export const partAttachmentsApi = {
+  list: (partId: string, category: string) =>
+    api.get<PartAttachment[]>(`/components/${partId}/attachments`, { params: { category } }),
+  remove: (partId: string, attachmentId: string) =>
+    api.delete(`/components/${partId}/attachments/${attachmentId}`),
 };
 
 // 媒体令牌 API（替代 ?token= 的会话 JWT）
@@ -413,14 +413,28 @@ export const CHUNK_THRESHOLD = CHUNK_SIZE * 2; // 10MB
 
 // 部件子项 API
 export const assemblyPartsApi = {
-  list: (assemblyId: string) => api.get(`/assemblies/${assemblyId}/parts`),
-  add: (assemblyId: string, data: { child_type: string; child_id: string; quantity: number }) =>
-    api.post(`/assemblies/${assemblyId}/parts`, data),
-  update: (assemblyId: string, itemId: string, data: { quantity: number }) =>
-    api.put(`/assemblies/${assemblyId}/parts/${itemId}`, data),
-  remove: (assemblyId: string, itemId: string) =>
-    api.delete(`/assemblies/${assemblyId}/parts/${itemId}`),
+  list: (partId: string) => {
+    const user = useAuthStore.getState().user;
+    return api.get(`/parts/${encodeURIComponent(partId)}/parts`, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+  },
+  add: (partId: string, data: { child_type: string; child_id: string; quantity: number }) => {
+    const user = useAuthStore.getState().user;
+    return api.post(`/parts/${encodeURIComponent(partId)}/parts`, data, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+  },
+  update: (partId: string, itemId: string, data: { quantity: number }) => {
+    const user = useAuthStore.getState().user;
+    return api.put(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, data, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+  },
+  remove: (partId: string, itemId: string) => {
+    const user = useAuthStore.getState().user;
+    return api.delete(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+  },
 };
+
+function wsParams(params?: Record<string, unknown>): Record<string, unknown> {
+  const user = useAuthStore.getState().user;
+  return { ...params, workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' };
+}
 
 // 自定义字段 API
 export const customFieldsApi = {

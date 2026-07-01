@@ -1,4 +1,4 @@
-"""零部件附件/文档链接路由。"""
+"""零部件附件/文档链接路由（PartMaster）。"""
 from __future__ import annotations
 
 import uuid
@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
-from app.models.pdm import Component, ComponentAttachment
+from app.models.part import PartMaster
+from app.models.pdm import PartAttachment
 from app.models.models_document import Document
 from app.routers.auth import get_current_active_user
 from app.core.permissions import require_permission
@@ -30,45 +31,45 @@ class UpdateLinkDocumentBody(BaseModel):
     sort_order: Optional[int] = None
 
 
-def _get_component(db: Session, component_id: uuid.UUID) -> Component:
-    comp = db.query(Component).filter(
-        Component.id == component_id,
-        Component.deleted_at.is_(None),
+def _get_part_master(db: Session, part_master_id: uuid.UUID) -> PartMaster:
+    pm = db.query(PartMaster).filter(
+        PartMaster.id == part_master_id,
+        PartMaster.deleted_at.is_(None),
     ).first()
-    if not comp:
+    if not pm:
         raise HTTPException(status_code=404, detail="零部件不存在")
-    return comp
+    return pm
 
 
 # ── 附件 ──────────────────────────────────────────────────────────────
 
-@router.get("/{component_id}/attachments")
+@router.get("/{part_master_id}/attachments")
 def list_attachments(
-    component_id: uuid.UUID,
+    part_master_id: uuid.UUID,
     category: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    _get_component(db, component_id)
-    q = db.query(ComponentAttachment).filter(
-        ComponentAttachment.component_id == component_id,
+    _get_part_master(db, part_master_id)
+    q = db.query(PartAttachment).filter(
+        PartAttachment.part_master_id == part_master_id,
     )
     if category:
-        q = q.filter(ComponentAttachment.category == category)
-    return q.order_by(ComponentAttachment.created_at.desc()).all()
+        q = q.filter(PartAttachment.category == category)
+    return q.order_by(PartAttachment.created_at.desc()).all()
 
 
-@router.delete("/{component_id}/attachments/{attachment_id}")
+@router.delete("/{part_master_id}/attachments/{attachment_id}")
 def delete_attachment(
-    component_id: uuid.UUID,
+    part_master_id: uuid.UUID,
     attachment_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("components:manage")),
 ):
-    _get_component(db, component_id)
-    att = db.query(ComponentAttachment).filter(
-        ComponentAttachment.id == attachment_id,
-        ComponentAttachment.component_id == component_id,
+    _get_part_master(db, part_master_id)
+    att = db.query(PartAttachment).filter(
+        PartAttachment.id == attachment_id,
+        PartAttachment.part_master_id == part_master_id,
     ).first()
     if not att:
         raise HTTPException(status_code=404, detail="附件不存在")
@@ -100,6 +101,8 @@ def _enrich_links(links: list, db: Session) -> list:
                 "name": doc.name,
                 "version": doc.version,
                 "status": doc.status,
+                "file_name": doc.file_name,
+                "file_id": str(doc.file_id) if doc.file_id else None,
             }
         else:
             entry["document"] = None
@@ -113,7 +116,7 @@ def list_document_links(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    comp = _get_component(db, component_id)
+    comp = _get_part_master(db, component_id)
     links = comp.document_links or []
     return _enrich_links(links, db)
 
@@ -125,7 +128,7 @@ def link_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("components.doc:link")),
 ):
-    comp = _get_component(db, component_id)
+    comp = _get_part_master(db, component_id)
     doc = db.query(Document).filter(
         Document.id == body.document_id,
         Document.deleted_at.is_(None),
@@ -156,7 +159,7 @@ def update_document_link(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("components.doc:link")),
 ):
-    comp = _get_component(db, component_id)
+    comp = _get_part_master(db, component_id)
     links = list(comp.document_links or [])
     updated = None
     for link in links:
@@ -181,7 +184,7 @@ def unlink_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("components.doc:unlink")),
 ):
-    comp = _get_component(db, component_id)
+    comp = _get_part_master(db, component_id)
     links = list(comp.document_links or [])
     new_links = [link for link in links if link.get("id") != link_id]
     if len(new_links) == len(links):

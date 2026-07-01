@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { componentAttachmentsApi, mediaApi, v2UploadApi, CHUNK_THRESHOLD, CHUNK_SIZE } from '../services/api';
-import type { ComponentAttachment } from '../services/api';
+import { partAttachmentsApi, mediaApi, v2UploadApi, CHUNK_THRESHOLD, CHUNK_SIZE } from '../services/api';
+import type { PartAttachment } from '../services/api';
 import { previewAttachment } from '../utils/attachmentPreview';
 import ArchiveTreeModal from './ArchiveTreeModal';
 
-interface ComponentAttachmentBucketProps {
-  componentId: string;
+interface PartAttachmentBucketProps {
+  partId: string;
   category: 'cad' | 'production';
   label: string;
   editable?: boolean;
@@ -15,8 +15,8 @@ interface ComponentAttachmentBucketProps {
 const fmtSize = (n: number | null) =>
   n == null ? '-' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
 
-export default function ComponentAttachmentBucket({ componentId, category, label, editable, hideWhenEmpty }: ComponentAttachmentBucketProps) {
-  const [items, setItems] = useState<ComponentAttachment[]>([]);
+export default function PartAttachmentBucket({ partId, category, label, editable, hideWhenEmpty }: PartAttachmentBucketProps) {
+  const [items, setItems] = useState<PartAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadName, setUploadName] = useState('');
@@ -28,20 +28,20 @@ export default function ComponentAttachmentBucket({ componentId, category, label
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await componentAttachmentsApi.list(componentId, category);
+      const res = await partAttachmentsApi.list(partId, category);
       setItems(res.data || []);
     } catch {
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [componentId, category]);
+  }, [partId, category]);
 
   useEffect(() => { load(); }, [load]);
 
   const uploadLarge = async (file: File) => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const init = await v2UploadApi.initChunkedUpload(file.name, file.size, 'components', componentId, category);
+    const init = await v2UploadApi.initChunkedUpload(file.name, file.size, 'part', partId, category);
     for (let i = 0; i < totalChunks; i++) {
       const start = i * CHUNK_SIZE;
       await v2UploadApi.uploadChunk(init.upload_id, i, file.slice(start, Math.min(start + CHUNK_SIZE, file.size)));
@@ -61,7 +61,7 @@ export default function ComponentAttachmentBucket({ componentId, category, label
       if (file.size > CHUNK_THRESHOLD) {
         await uploadLarge(file);
       } else {
-        await v2UploadApi.uploadSmallFile(file, 'components', componentId, (p) => setProgress(p), category);
+        await v2UploadApi.uploadSmallFile(file, 'part', partId, (p) => setProgress(p), category);
       }
       await load();
     } catch {
@@ -75,7 +75,7 @@ export default function ComponentAttachmentBucket({ componentId, category, label
   const handleDelete = async (attId: string) => {
     if (!confirm('确定要删除该附件吗？')) return;
     setDeletingId(attId);
-    try { await componentAttachmentsApi.remove(componentId, attId); await load(); }
+    try { await partAttachmentsApi.remove(partId, attId); await load(); }
     catch { alert('删除失败，请重试'); }
     finally { setDeletingId(null); }
   };

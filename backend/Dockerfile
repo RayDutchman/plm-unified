@@ -15,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制源码
 COPY app/ ./app/
+COPY alembic.ini .
+COPY migrations/ ./migrations/
 
 # 启动
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

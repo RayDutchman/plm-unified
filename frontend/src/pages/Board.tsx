@@ -291,7 +291,7 @@ export default function Board() {
       
       // Load custom field defs and values
       const allDefs = useDataStore.getState().customFieldDefs;
-      const entityType = item.entity_type === 'part' ? 'part' : item.entity_type === 'assembly' ? 'component' : item.entity_type === 'document' ? 'document' : 'configuration';
+      const entityType = item.entity_type === 'part' ? 'part' : item.entity_type === 'assembly' ? 'assembly' : item.entity_type === 'document' ? 'document' : 'configuration';
       const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes(entityType));
       setDetailCustomDefs(defs);
       

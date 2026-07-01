@@ -112,7 +112,7 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
       if (reqId !== nestedReqId.current) return;
       setNestedData(res.data);
       const allDefs = useDataStore.getState().customFieldDefs;
-      const entityType = type === 'part' ? 'part' : 'component';
+      const entityType = type === 'part' ? 'part' : 'assembly';
       const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes(entityType));
       setNestedCustomDefs(defs);
       if (defs.length > 0) {
