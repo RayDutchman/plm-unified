@@ -290,16 +290,16 @@ feat(part-api): 实现签入签出状态机
 
 **M3 完成后启动。M4 达成即进入 MVP 状态。**
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 4.1 | 设计变更管理新 Schema（`change_issues`、`change_requests`、`change_orders`、`eco_execution_items`），写 Alembic migration | **A 主写** | 串行起点 |
-| 4.2 | B review Schema，确认 `eco_execution_items` 与 myPDM 原有字段的映射 | B | → 4.1 |
-| 4.3 | 实现 ECR 模块（CRUD、审批流、状态机：draft→submitted→approved→closed） | B | → 4.2 |
-| 4.4 | 实现 ECO 基础模块（CRUD、审批流）及执行状态机（draft→submitted→approved→executing→executed→closed） | B | ‖ 4.3 |
-| 4.5 | 实现 ECO 执行项对接 PartMaster（5 种执行动作，每项完成后写回 done/failed 状态） | **A 主写** | → 4.4 |
-| 4.6 | B review ECO 执行逻辑，确认与 myPDM 原有执行框架兼容 | B | → 4.5 |
-| 4.7 | 前端 `/ec` 页面联调（直接复用 myPDM `/ec`，调整 API 地址） | B | → 4.5 |
-| 4.8 | 写 M4 验收测试（端到端：提交 ECR→审批→创建 ECO→执行版本升级→执行项 done→新版本可查） | AB | → 4.7 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 4.1 | 设计变更管理新 Schema（`change_issues`、`change_requests`、`change_orders`、`eco_execution_items`），写 Alembic migration | **A 主写** | 串行起点 | ✅（change_issues 模型+migration+CRUD已交付，B已导入myPDM的ECR/ECO/execution_items全套） |
+| 4.2 | B review Schema，确认 `eco_execution_items` 与 myPDM 原有字段的映射 | B | → 4.1 | ✅（B侧已实现：4种action+状态机+升版/释放/冻结/还原逻辑，crud已完备） |
+| 4.3 | 实现 ECR 模块（CRUD、审批流、状态机：draft→submitted→approved→closed） | B | → 4.2 | ✅（B已导入myPDM完整ECR路由+审批+状态机，systemd合入） |
+| 4.4 | 实现 ECO 基础模块（CRUD、审批流）及执行状态机（draft→submitted→approved→executing→executed→closed） | B | ‖ 4.3 | ✅（B已实现：execute/complete端点，状态机完备，4种action正常） |
+| 4.5 | 实现 ECO 执行项对接 PartMaster（5 种执行动作，每项完成后写回 done/failed 状态） | **A 主写** | → 4.4 | ✅（B已实现：upgrade/release/freeze/revert，状态写回completed/failed，单条+一键执行） |
+| 4.6 | B review ECO 执行逻辑，确认与 myPDM 原有执行框架兼容 | B | → 4.5 | ✅（B侧已对接完毕，权限门控统一后正常工作） |
+| 4.7 | 前端 `/ec` 页面联调（直接复用 myPDM `/ec`，调整 API 地址） | B | → 4.5 | 🟡（后端就绪，前端待联调） |
+| 4.8 | 写 M4 验收测试（端到端：提交 ECR→审批→创建 ECO→执行版本升级→执行项 done→新版本可查） | AB | → 4.7 | ⬜ |
 
 **✅ MVP 里程碑达成条件**：验收测试全部通过——端到端走通完整变更流程，ECO 执行项驱动 PartMaster 数据实际发生版本升级，新版本在零件列表中可查到。
 
