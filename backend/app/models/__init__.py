@@ -8,6 +8,7 @@ from app.models.models_document import Document, DocumentAttachment, DocumentLin
 from app.models.pdm import PartAttachment
 from app.models.models_ecr import ECR, ECRAffectedItem, ECRReviewRecord, ECRStatusLog
 from app.models.models_eco import ECO, ECOExecutionItem, ECOReviewRecord as ECOReview, ECOStatusLog as ECOStatus
+from app.models.models_change_issue import ChangeIssue
 from app.models.models_inventory import (
     Warehouse, InventoryMaterial, InventoryStock, InventoryLedger,
     InventoryDocument, InventoryDocumentLine, InventoryReviewRecord, InventoryStatusLog,
@@ -36,6 +37,7 @@ __all__ = [
     "PartAttachment",
     "ECR", "ECRAffectedItem", "ECRReviewRecord", "ECRStatusLog",
     "ECO", "ECOExecutionItem", "ECOReview", "ECOStatus",
+    "ChangeIssue",
     "Warehouse", "InventoryMaterial", "InventoryStock", "InventoryLedger",
     "InventoryDocument", "InventoryDocumentLine", "InventoryReviewRecord", "InventoryStatusLog",
     "ConfigurationItem", "ConfigurationItemPart", "ConfigurationItemChild",

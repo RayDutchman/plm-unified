@@ -34,6 +34,7 @@ class ECR(Base):
     closed_at = Column(DateTime(timezone=True), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True, default=None)
     eco_id = Column(UUID(as_uuid=True), nullable=True)
+    issue_id = Column(UUID(as_uuid=True), ForeignKey("change_issues.id", ondelete="SET NULL"), nullable=True)
 
 
 class ECRAffectedItem(Base):
