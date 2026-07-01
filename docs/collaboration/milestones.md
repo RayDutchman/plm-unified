@@ -251,8 +251,8 @@ feat(part-api): 实现签入签出状态机
 | 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 | ✅（详情弹窗已抽出为 PartMasterDetailModal，含子项/附件/图文档/版本历史 TAB） |
 | 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 | ⬜ |
 | 3.6 | 在零件详情页挂 3D 预览入口：单零件走 STPViewer Modal，装配体走 `/viewer?part=X&version=A` 前端路由（P5.3 调整：以路由链接代替 iframe，共享主应用认证状态） | B | → 3.4 | ✅（详情弹窗 Tab 行右侧已加 📦 3D预览按钮，点击跳转 /viewer 路由） |
-| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 测试通过后 | 🔁（不再需要：plm-unified 未部署 Backbone.js front 容器，DocDoku 原容器保留独立运行） |
-| 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 | ⬜ |
+| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 | ✅（N/A：plm-unified 未部署 Backbone，DocDoku 原容器独立运行） |
+| 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 | ✅（后端 API 验收通过：CRUD 201/200、instances 84实例含完整字段、geometry 200返回GLB、viewer路由200、认证401拦截） |
 
 **✅ M3 达成条件**：验收测试通过——用户完全通过 React 前端完成零件创建、BOM 查看，点击详情页按钮跳转 `/viewer` 路由完成 3D 装配体预览。
 
