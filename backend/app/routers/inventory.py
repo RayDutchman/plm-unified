@@ -267,10 +267,24 @@ def _doc_brief(db, d):
 def _doc_detail(db, d):
     base = _doc_brief(db, d)
     lines = crud_inventory.get_document_lines(db, d.id)
+
+    def _book_qty(line):
+        if line.book_quantity is not None:
+            return float(line.book_quantity)
+        if d.doc_type == "stocktake":
+            stock = db.query(InventoryStock).filter(
+                InventoryStock.material_id == line.material_id,
+                InventoryStock.warehouse_id == d.warehouse_id,
+                InventoryStock.batch_no == (line.batch_no or ""),
+            ).first()
+            if stock and stock.quantity is not None:
+                return float(stock.quantity)
+        return None
+
     base["lines"] = [{
         "id": str(l.id), "material_id": str(l.material_id), "batch_no": l.batch_no,
         "quantity": float(l.quantity), "direction": l.direction,
-        "book_quantity": float(l.book_quantity) if l.book_quantity is not None else None,
+        "book_quantity": _book_qty(l),
         "counted_quantity": float(l.counted_quantity) if l.counted_quantity is not None else None,
         "remark": l.remark, "sort_order": l.sort_order,
     } for l in lines]
