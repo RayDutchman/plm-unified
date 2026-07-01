@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useDataStore } from '../stores/data';
 import { useAuthStore } from '../stores/auth';
-import api, { partsApi, assembliesApi } from '../services/api';
+import api, { assembliesApi } from '../services/api';
 import { bomApi } from '../services/api';
+import { partMasterApi } from '../services/partMasterApi';
 import { Modal } from './Modal';
 import type { Part, Assembly } from '../types';
 
@@ -312,16 +313,19 @@ export default function AssemblyPartPicker({
                   if (!quickForm.code.trim() || !quickForm.name.trim()) return;
                   setQuickCreating(true);
                   try {
-                    const api = partsApi;
-                    const r = await api.create({ code: quickForm.code.trim(), name: quickForm.name.trim(), spec: quickForm.spec || undefined, remark: quickForm.remark || undefined });
-                    const d = r.data;
-                    const newItem: SelectedItem = { id: d.id, code: d.number || d.code || quickForm.code, name: d.name, version: d.latestVersion || d.version || 'A', status: d.latestStatus || d.status || 'WIP', type: 'part', quantity: 1 };
+                    // 统一走 partMasterApi.create：字段为 number/name/type，且自动注入 workspace_id
+                    const r = await partMasterApi.create({ number: quickForm.code.trim(), name: quickForm.name.trim(), type: quickForm.spec.trim() || undefined });
+                    const d: any = r.data;
+                    const newItem: SelectedItem = { id: d.id, code: d.number || quickForm.code, name: d.name, version: d.latestVersion || 'A', status: d.latestStatus || 'WIP', type: 'part', quantity: 1 };
                     setSelected(prev => new Map(prev).set(newItem.id, newItem));
                     // 同步添加到候选列表，无需重新搜索
-                    const candidate: CandidateItem = { id: newItem.id, code: newItem.code, name: newItem.name, version: newItem.version, status: newItem.status, type: 'part' };
+                    const candidate: CandidateItem = { id: newItem.id, code: newItem.code, name: newItem.name, version: newItem.version, status: newItem.status, spec: d.type || quickForm.spec || undefined, type: 'part' };
                     setFetchedParts(prev => [...prev, candidate as any]);
                     setQuickForm({ code: '', name: '', spec: '', remark: '' });
-                  } catch { } finally { setQuickCreating(false); }
+                  } catch (e: any) {
+                    const detail = e?.response?.data?.detail;
+                    alert(typeof detail === 'string' ? `新建失败：${detail}` : '新建零部件失败（件号可能已存在），请重试');
+                  } finally { setQuickCreating(false); }
                 }} disabled={quickCreating} className="px-4 py-1.5 text-sm bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50 whitespace-nowrap">
                   {quickCreating ? '创建中...' : '新建并添加'}
                 </button>
