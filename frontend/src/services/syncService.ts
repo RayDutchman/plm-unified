@@ -1,4 +1,5 @@
 import { useDataStore } from '../stores/data';
+import { useAuthStore } from '../stores/auth';
 import { syncApi } from './syncApi';
 import { partsApi, assembliesApi, documentsApi, bomApi, configurationApi, ecrApi, ecoApi } from './api';
 import type { SyncStatus, Part, Assembly, Document, BOMItem, ConfigItemBrief, ECR, ECO } from '../types';
@@ -224,6 +225,7 @@ class SyncService {
   }
 
   private async poll() {
+    if (!useAuthStore.getState().token) return;
     const store = useDataStore.getState();
 
     try {

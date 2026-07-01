@@ -48,9 +48,10 @@ export default function Layout() {
   const headerContent = usePageHeader((s) => s.content);
   const userRole = user?.role || 'guest';
 
-  // Auto-start sync on mount
+  // Auto-start sync after auth store is ready
+  const isAuthenticated = !!user;
   useEffect(() => {
-    if (autoSyncEnabled) {
+    if (autoSyncEnabled && isAuthenticated) {
       syncService.start();
     }
     return () => {
