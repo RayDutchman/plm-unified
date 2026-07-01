@@ -29,7 +29,7 @@ export function STPViewerModal({ open, attachmentId, fileName, onClose }: STPVie
     if (!open || !attachmentId) return;
     setLoadingState('converting', '正在检查模型...');
     mediaApi.token(attachmentId, 'gltf').then(mt => {
-      const url = `/api/v2/attachments/${attachmentId}/gltf?token=${encodeURIComponent(mt)}`;
+      const url = `/api/attachments/${attachmentId}/gltf?token=${encodeURIComponent(mt)}`;
       gltfUrlRef.current = url;
       checkAndLoad(url);
     }).catch(() => {

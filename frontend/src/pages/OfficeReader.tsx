@@ -31,7 +31,7 @@ export default function OfficeReader() {
     (async () => {
       try {
         const resp = await fetch(
-          `/api/v2/attachments/${id}/preview?token=${encodeURIComponent(token)}`,
+          `/api/attachments/${id}/preview?token=${encodeURIComponent(token)}`,
         );
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const buf = await resp.arrayBuffer();
