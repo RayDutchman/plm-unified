@@ -2,8 +2,14 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# 系统依赖: libGL (Mayo OpenGL需求)
-RUN apt-get update -qqy && apt-get install -qqy --no-install-recommends xvfb libgl1 libfontconfig1 libxkbcommon0 && rm -rf /var/lib/apt/lists/*
+# 系统依赖:
+#   libGL/xvfb 等 — Mayo OpenGL 需求
+#   libreoffice(soffice) — Office(doc/docx/ppt/pptx/xls/xlsx) 转 PDF 预览
+#   fonts-noto-cjk — 保证中文文档转 PDF 时不缺字
+RUN apt-get update -qqy && apt-get install -qqy --no-install-recommends \
+        xvfb libgl1 libfontconfig1 libxkbcommon0 libglib2.0-0 libegl1 \
+        libreoffice fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
 
 # Mayo CLI (OCC原生STEP→GLB转换) — AppImage 提取模式（无需FUSE）
 COPY MayoConv-0.9.0-x86_64.AppImage /tmp/MayoConv

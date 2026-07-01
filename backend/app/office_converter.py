@@ -15,10 +15,12 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
-# PDF 缓存目录（容器内路径，对应宿主机 uploads/pdf_cache/）
-PDF_CACHE_DIR = Path("/app/uploads/pdf_cache")
+# PDF 缓存目录（对应宿主机 uploads/pdf_cache/，随 uploads 卷持久化，与 glb_cache 一致）
+PDF_CACHE_DIR = Path(settings.uploads_path) / "pdf_cache"
 
 OFFICE_EXTS = (".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx")
 
