@@ -245,16 +245,16 @@ feat(part-api): 实现签入签出状态机
 
 | # | 行动项 | 负责 | 串/并 | 状态 |
 |---|---|---|---|---|
-| 3.1 | **以 myPDM STPViewer（已是 R184 + React 18 + TypeScript）为基础**，完成查看器能力建设，分五个 Phase 推进（详见下方展开）：**Phase 1** 渲染质量对齐（深色背景、抗锯齿、边线轮廓、IBL 强度）；**Phase 2** 补全 DocDoku 易补功能（截图下载、FlyTo 飞向选中件）；**Phase 3** 多精度 LOD + 按需加载（conversion service 生成三精度 GLB，backend 存三条 Geometry，前端 GeometryWorker + LODController）；**Phase 4** 装配体实例矩阵渲染（instances API + applyMatrix4，BOM 树适配，核心合并功能）；**Phase 5** 独立静态服务（/viewer 路由 + nginx 容器 + 零件详情 iframe 嵌入） | A | 串行起点，各 Phase 内部可并行 | ⬜ |
+| 3.1 | **以 myPDM STPViewer（已是 R184 + React 18 + TypeScript）为基础**，完成查看器能力建设，分五个 Phase 推进（详见下方展开）：**Phase 1** 渲染质量对齐（深色背景、抗锯齿、边线轮廓、IBL 强度）；**Phase 2** 补全 DocDoku 易补功能（截图下载、FlyTo 飞向选中件）；**Phase 3** 多精度 LOD + 按需加载（conversion service 生成三精度 GLB，backend 存三条 Geometry，前端 GeometryWorker + LODController）；**Phase 4** 装配体实例矩阵渲染（instances API + applyMatrix4，BOM 树适配，核心合并功能）；**Phase 5** 独立静态服务（/viewer 路由 + nginx 容器 + 零件详情 iframe 嵌入） | A | 串行起点，各 Phase 内部可并行 | ✅（P1-P5 全部完成，84实例渲染正常） |
 | 3.2 | ~~将升级后的 3D 查看器部署为独立静态服务~~（**已合并入 3.1 Phase 5**） | — | → 3.1 | 🔁（并入 3.1） |
-| 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 | ⬜ |
-| 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 | 🟡（UI 已就绪，数据仍走 mock） |
+| 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 | ✅（已合并至 feat/m3-viewer-lod） |
+| 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 | ✅（详情弹窗已抽出为 PartMasterDetailModal，含子项/附件/图文档/版本历史 TAB） |
 | 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 | ⬜ |
-| 3.6 | 在零件详情页嵌入 3D 查看器 iframe（传入 JWT Token + 零件路径参数） | B | → 3.2 & 3.4 | ⬜ |
-| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 测试通过后 | ⬜ |
+| 3.6 | 在零件详情页挂 3D 预览入口：单零件走 STPViewer Modal，装配体走 `/viewer?part=X&version=A` 前端路由（P5.3 调整：以路由链接代替 iframe，共享主应用认证状态） | B | → 3.4 | ✅（详情弹窗 Tab 行右侧已加 📦 3D预览按钮，点击跳转 /viewer 路由） |
+| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 测试通过后 | 🔁（不再需要：plm-unified 未部署 Backbone.js front 容器，DocDoku 原容器保留独立运行） |
 | 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 | ⬜ |
 
-**✅ M3 达成条件**：验收测试全部通过——用户完全通过 React 前端完成零件创建、BOM 查看、3D 预览，Backbone.js 前端不再需要，旧 `front` 容器已下线。
+**✅ M3 达成条件**：验收测试通过——用户完全通过 React 前端完成零件创建、BOM 查看，点击详情页按钮跳转 `/viewer` 路由完成 3D 装配体预览。
 
 #### 3.1 详细展开
 
@@ -276,9 +276,9 @@ feat(part-api): 实现签入签出状态机
 | | 4.2 实例矩阵加载 | `ModelLoader.tsx` | assembly 模式：请求 `GET /api/parts/{num}/{ver}/instances`，对每个实例 fetch LOD0 GLB → `object3d.applyMatrix4(new Matrix4().fromArray(globalMatrix))` → 加入场景 | 4.1 |
 | | 4.3 BOM 树适配 | `buildModelTree.ts` | assembly 模式改为从 instances API 的 component 层级构建 TreeNode，叶节点绑定实例 meshUuid | 4.2 |
 | | 4.4 LOD Worker 适配 | `GeometryWorker.ts` | 注册实例时附带世界坐标包围球（bbox + matrix 变换），Worker 用世界空间距离评分 | 4.3 + 3.4 |
-| **P5 独立服务** | 5.1 独立 /viewer 路由 | `frontend/src/pages/ViewerPage.tsx`（新建） | 接受 URL 参数 `?partNumber=X&version=A&iteration=1&workspaceId=...&token=JWT&mode=part\|assembly`，渲染 STPViewer | P4 |
-| | 5.2 nginx 容器 | `docker/docker-compose.yml` | 新增 `viewer` service，serve `frontend/dist`，宿主机 8020 端口 | 5.1 |
-| | 5.3 零件详情页嵌入 | `PartMasters.tsx` | 详情页加 `<iframe src="http://localhost:8020/viewer?...&token=JWT">` | 5.2 |
+| **P5 路由入口** | 5.1 前端路由 `/viewer` | `App.tsx` + `pages/AssemblyViewerPage.tsx` | 新增 `/viewer` 路由（lazy import），接受 URL 参数 `?part=X&version=A`，全屏渲染 AssemblyViewer；共享主应用认证状态（无需 URL 传 token） | P4 |
+| | 5.2 零件详情页挂入口 | `PartMasterDetailModal.tsx` | 详情页 Tab 行右侧加 `[📦 3D装配预览]` 按钮，点击 `navigate('/viewer?part=...&version=...')` | ✅ |
+| | ~~5.3 nginx 容器~~ | — | **已取消**：采用前端路由方案，3D 查看器 bundle 通过 Vite dynamic import 按需加载，无需独立容器 | — |
 
 **执行依赖**：P1 → P2 → P5；P3.1 → P3.2 → P3.3 → P3.4 → P4 → P5（P1/P2 与 P3 可并行）
 
