@@ -76,7 +76,7 @@ def create_part_endpoint(
     return _enrich_response(db, master)
 
 
-@router.get("", response_model=list[PartListItem], summary="零件列表")
+@router.get("", summary="零件列表")
 def list_parts_endpoint(
     workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
     skip: int = Query(0, ge=0),
