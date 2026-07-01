@@ -2,6 +2,18 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '../stores/auth';
 import type { ECRListParams, ECRCreateData } from '../types';
 
+/** 需要自动注入 workspace_id 的 API 路径前缀 */
+const WS_API_PREFIXES = ['/parts', '/iterations', '/instances', '/nativecad', '/conversion', '/geometry', '/bom', '/issues', '/components'];
+
+/** 集中获取当前 workspace_id，缺失时抛出明确错误 */
+export function getWorkspaceId(): string {
+  const user = useAuthStore.getState().user;
+  if (!user?.workspaceId) {
+    throw new Error('[workspace] 当前用户缺少 workspaceId，请检查登录响应 /auth/me');
+  }
+  return user.workspaceId;
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
@@ -23,11 +35,27 @@ const api = axios.create({
   },
 });
 
-// 请求拦截器：自动添加 Token
+// 请求拦截器：自动添加 Token + workspace_id
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // 自动注入 workspace_id 到需要的 API
+  const url = config.url || '';
+  const needsWs = WS_API_PREFIXES.some(p => url.startsWith(p));
+  if (needsWs) {
+    try {
+      const wsId = getWorkspaceId();
+      if (config.method === 'get' || config.method === 'head' || config.method === 'delete') {
+        config.params = { workspace_id: wsId, ...(config.params || {}) };
+      } else {
+        // POST/PUT/PATCH: 只加到 query params（不篡改 body）
+        config.params = { workspace_id: wsId, ...(config.params || {}) };
+      }
+    } catch {
+      // workspace_id missing — 让请求自己报 400/422，不静默失败
+    }
   }
   return config;
 });
@@ -105,8 +133,8 @@ export const partsApi = {
 // 部件 API（统一使用 PartMaster 端点，适配旧接口格式）
 export const assembliesApi = {
   list: (params?: { page?: number; page_size?: number; search?: string; status?: string; brief?: boolean; updated_since?: number; top_level?: boolean }) =>
-    api.get('/parts', { params: { ...params, workspace_id: useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001' } }),
-  get: (id: string) => api.get(`/parts/${encodeURIComponent(id)}`, { params: { workspace_id: useAuthStore.getState().user?.workspaceId || '00000000-0000-0000-0000-000000000001' } }),
+    api.get('/parts', { params }),
+  get: (id: string) => api.get(`/parts/${encodeURIComponent(id)}`),
   create: (data: unknown) => api.post('/parts', data),
   update: (id: string, data: unknown) => api.put(`/parts/${encodeURIComponent(id)}`, data),
   delete: (id: string) => api.delete(`/parts/${encodeURIComponent(id)}`),
@@ -415,25 +443,25 @@ export const CHUNK_THRESHOLD = CHUNK_SIZE * 2; // 10MB
 export const assemblyPartsApi = {
   list: (partId: string) => {
     const user = useAuthStore.getState().user;
-    return api.get(`/parts/${encodeURIComponent(partId)}/parts`, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+    return api.get(`/parts/${encodeURIComponent(partId)}/parts`, {});
   },
   add: (partId: string, data: { child_type: string; child_id: string; quantity: number }) => {
     const user = useAuthStore.getState().user;
-    return api.post(`/parts/${encodeURIComponent(partId)}/parts`, data, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+    return api.post(`/parts/${encodeURIComponent(partId)}/parts`, data, {});
   },
   update: (partId: string, itemId: string, data: { quantity: number }) => {
     const user = useAuthStore.getState().user;
-    return api.put(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, data, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+    return api.put(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, data, {});
   },
   remove: (partId: string, itemId: string) => {
     const user = useAuthStore.getState().user;
-    return api.delete(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, { params: { workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' } });
+    return api.delete(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, {});
   },
 };
 
 function wsParams(params?: Record<string, unknown>): Record<string, unknown> {
   const user = useAuthStore.getState().user;
-  return { ...params, workspace_id: user?.workspaceId || '00000000-0000-0000-0000-000000000001' };
+  return { ...params };
 }
 
 // 自定义字段 API

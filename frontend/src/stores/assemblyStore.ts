@@ -1,3 +1,4 @@
+import { getWorkspaceId } from '../services/api';
 /**
  * assemblyStore.ts
  *
@@ -64,7 +65,7 @@ export interface AssemblyState {
 
 const initialState = {
   instances: [] as AssemblyInstance[],
-  workspaceId: '00000000-0000-0000-0000-000000000001',
+  workspaceId: getWorkspaceId(),
   bufferCache: new Map<string, ArrayBuffer>(),
   errorCache: new Map<string, string>(),
   loading: false,
