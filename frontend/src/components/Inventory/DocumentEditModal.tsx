@@ -44,8 +44,8 @@ export default function DocumentEditModal({ docType, onClose, onSaved }:
   const isAdjustment = docType === 'adjustment';
   const isOutbound = docType === 'outbound';
   const isStocktake = docType === 'stocktake';
-  // 调拨/出库/盘点：明细物料从「该仓有货」的库存中筛选，并展示余量
-  const usesStockPicker = isTransfer || isOutbound || isStocktake;
+  // 调拨/出库/盘点/调整：明细物料从「该仓有货」的库存中筛选，并展示余量
+  const usesStockPicker = isTransfer || isOutbound || isStocktake || isAdjustment;
 
   // 加载库存余额，供「仓库有货物料」筛选与余量展示
   const [stockRows, setStockRows] = useState<StockRow[]>([]);
@@ -194,6 +194,7 @@ export default function DocumentEditModal({ docType, onClose, onSaved }:
                     <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">批次</th>
                     <th className="text-right px-3 py-2 text-xs font-medium text-gray-500">{isStocktake ? '账面量' : isTransfer ? '源仓余量' : '仓库余量'}</th>
                     {isTransfer && <th className="text-right px-3 py-2 text-xs font-medium text-gray-500">目标仓余量</th>}
+                    {isAdjustment && <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">方向</th>}
                     {!isStocktake && <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">{isTransfer ? '调拨数量' : '出库数量'}</th>}
                     <th className="px-3 py-2"></th>
                   </tr>
@@ -220,6 +221,14 @@ export default function DocumentEditModal({ docType, onClose, onSaved }:
                         <td className="px-3 py-2 text-sm text-gray-500">{l.batch_no || '-'}</td>
                         <td className="px-3 py-2 text-sm text-right text-gray-500">{srcBal ?? '-'}</td>
                         {isTransfer && <td className="px-3 py-2 text-sm text-right text-gray-500">{toWarehouseId ? tgtBal : '-'}</td>}
+                        {isAdjustment && (
+                          <td className="px-3 py-2">
+                            <select value={l.direction || 'in'} onChange={(e) => updateLine(i, { direction: e.target.value as any })}
+                              className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-primary-500">
+                              <option value="in">盘盈+</option><option value="out">报损-</option>
+                            </select>
+                          </td>
+                        )}
                         {!isStocktake && (
                           <td className="px-3 py-2">
                             <input type="number" value={l.quantity}
