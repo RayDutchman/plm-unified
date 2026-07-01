@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { partMasterApi, type PartMasterDetail } from '../services/partMasterApi';
 import { customFieldsApi } from '../services/api';
 import type { CustomFieldDefinition, CustomFieldValue } from '../types';
@@ -37,7 +38,7 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
   const [tab, setTab] = useState<DetailTab>('basic');
   const [customDefs, setCustomDefs] = useState<CustomFieldDefinition[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, unknown>>({});
-
+  const navigate = useNavigate();
   useEffect(() => {
     if (!identifier) { setViewing(null); return; }
     let cancelled = false;
@@ -86,6 +87,15 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
             <TabBtn active={tab === 'production'} onClick={() => setTab('production')}>生产附件</TabBtn>
             <TabBtn active={tab === 'bom'} onClick={() => setTab('bom')}>子项清单</TabBtn>
             <TabBtn active={tab === 'versions'} onClick={() => setTab('versions')}>版本历史</TabBtn>
+            <div className="ml-auto" />
+            <button
+              type="button"
+              onClick={() => navigate(`/viewer?part=${encodeURIComponent(viewing.number)}&version=${viewing.latestVersion}`)}
+              className="px-3 py-1.5 text-xs border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50"
+              title="3D 装配体预览"
+            >
+              📦 3D预览
+            </button>
           </div>
 
           {tab === 'basic' && (
