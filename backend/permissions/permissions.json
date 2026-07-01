@@ -101,6 +101,7 @@
     "eco:submit": { "roles": ["admin", "engineer"], "object_policy": "eco_owner_or_admin" },
     "eco:withdraw": { "roles": ["admin", "engineer"], "object_policy": "eco_owner_or_admin" },
     "eco:close": ["admin", "engineer"],
+    "eco:approve": { "roles": ["admin", "engineer"], "object_policy": "eco_approver_or_admin" },
     "eco:execute": ["admin", "engineer"],
     "eco:execute_item": ["admin", "engineer"],
     "eco:execute_all": ["admin", "engineer"],
