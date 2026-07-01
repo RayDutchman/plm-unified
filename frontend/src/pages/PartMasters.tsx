@@ -91,19 +91,17 @@ export default function PartMasters() {
     if (defs.length === 0) return;
     let cancelled = false;
     (async () => {
-      const results = await Promise.allSettled(
-        items.map(it => customFieldsApi.getValues('part', it.id))
-      );
-      if (cancelled) return;
-      const map: Record<string, Record<string, unknown>> = {};
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled') {
-          const vals: Record<string, unknown> = {};
-          (r.value.data || []).forEach((v: CustomFieldValue) => { vals[v.field_id] = v.value; });
-          map[items[i].id] = vals;
+      try {
+        const ids = items.map(it => it.id).join(',');
+        const res = await customFieldsApi.getValuesBatch({ type: 'part', ids });
+        if (cancelled) return;
+        const raw = res.data as Record<string, Record<string, unknown>>;
+        const map: Record<string, Record<string, unknown>> = {};
+        for (const [eid, fieldMap] of Object.entries(raw)) {
+          map[eid] = fieldMap;
         }
-      });
-      setCustomFieldValuesMap(map);
+        setCustomFieldValuesMap(map);
+      } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
   }, [items]);
