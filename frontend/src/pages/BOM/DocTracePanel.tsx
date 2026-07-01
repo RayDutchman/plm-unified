@@ -162,8 +162,8 @@ export default function DocTracePanel({ onViewEntity }: DocTracePanelProps) {
             {(docTraceResult.references || []).filter((r: any) => r.entity_type === 'part').length > 0 && (
               <span>零件 <span className="font-medium text-blue-600">{(docTraceResult.references || []).filter((r: any) => r.entity_type === 'part').length}</span> 个</span>
             )}
-            {(docTraceResult.references || []).filter((r: any) => r.entity_type === 'component').length > 0 && (
-              <span>部件 <span className="font-medium text-green-600">{(docTraceResult.references || []).filter((r: any) => r.entity_type === 'component').length}</span> 个</span>
+            {(docTraceResult.references || []).filter((r: any) => r.entity_type === 'assembly').length > 0 && (
+             <span>部件 <span className="font-medium text-green-600">{(docTraceResult.references || []).filter((r: any) => r.entity_type === 'assembly').length}</span> 个</span>
             )}
             {docTraceResult.dashboard_folder_count > 0 && (
               <span>用户看板 <span className="font-medium text-purple-600">{docTraceResult.dashboard_folder_count}</span> 个</span>

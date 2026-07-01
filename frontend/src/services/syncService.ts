@@ -1,7 +1,8 @@
 import { useDataStore } from '../stores/data';
+import { useAuthStore } from '../stores/auth';
 import { syncApi } from './syncApi';
-import { partsApi, assembliesApi, documentsApi, bomApi, configurationApi } from './api';
-import type { SyncStatus, Part, Assembly, Document, BOMItem, ConfigItemBrief } from '../types';
+import { partsApi, assembliesApi, documentsApi, bomApi, configurationApi, ecrApi, ecoApi } from './api';
+import type { SyncStatus, Part, Assembly, Document, BOMItem, ConfigItemBrief, ECR, ECO } from '../types';
 
 interface SyncEntity {
   name: string;
@@ -114,6 +115,44 @@ function buildEntities(): SyncEntity[] {
         store.setConfigItems(current);
       },
     },
+    {
+      name: 'ecrs',
+      key: 'ecrs',
+      fetch: async (since: number) => {
+        const res = await ecrApi.list({
+          updated_since: since,
+          page_size: 10000,
+        } as any);
+        return Array.isArray(res.data?.items)
+          ? res.data.items
+          : Array.isArray(res.data) ? res.data : [];
+      },
+      merge: (items: ECR[]) => {
+        const store = useDataStore.getState();
+        const current = [...store.ecrs];
+        mergeItems(current, items as any[]);
+        store.setEcrs(current);
+      },
+    },
+    {
+      name: 'ecos',
+      key: 'ecos',
+      fetch: async (since: number) => {
+        const res = await ecoApi.list({
+          updated_since: since,
+          page_size: 10000,
+        } as any);
+        return Array.isArray(res.data?.items)
+          ? res.data.items
+          : Array.isArray(res.data) ? res.data : [];
+      },
+      merge: (items: ECO[]) => {
+        const store = useDataStore.getState();
+        const current = [...store.ecos];
+        mergeItems(current, items as any[]);
+        store.setEcos(current);
+      },
+    },
   ];
 }
 
@@ -186,6 +225,7 @@ class SyncService {
   }
 
   private async poll() {
+    if (!useAuthStore.getState().token) return;
     const store = useDataStore.getState();
 
     try {

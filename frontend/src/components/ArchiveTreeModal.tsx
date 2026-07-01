@@ -20,7 +20,7 @@ function formatSize(bytes: number): string {
 
 /** 构建提取/预览 URL */
 function extractUrl(attId: string, filePath: string, token: string, inline: boolean): string {
-  return `/api/v2/attachments/${attId}/extract-file?path=${encodeURIComponent(filePath)}&token=${encodeURIComponent(token)}&disposition=${inline ? 'inline' : 'attachment'}`;
+  return `/api/attachments/${attId}/extract-file?path=${encodeURIComponent(filePath)}&token=${encodeURIComponent(token)}&disposition=${inline ? 'inline' : 'attachment'}`;
 }
 
 /** 判断文件是否可预览 */

@@ -1,9 +1,15 @@
 from logging.config import fileConfig
 
+import warnings
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+from sqlalchemy.exc import SAWarning
 
 from alembic import context
+
+# documents ↔ document_attachments 的 file_id 外键构成循环引用，
+# 实际表已由迁移按正确顺序创建，忽略元数据排序警告。
+warnings.filterwarnings("ignore", message=".*unresolvable cycles.*", category=SAWarning)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

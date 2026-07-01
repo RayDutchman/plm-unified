@@ -37,7 +37,7 @@ export default function STPViewerPage() {
     const token = params.get('token');
     if (!id || !token) { setState('error'); return; }
 
-    const gltfUrl = `/api/v2/attachments/${id}/gltf?token=${encodeURIComponent(token)}`;
+    const gltfUrl = `/api/attachments/${id}/gltf?token=${encodeURIComponent(token)}`;
     checkAndLoad(gltfUrl);
   }, []);
 

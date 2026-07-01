@@ -89,7 +89,7 @@ export default function BOMTraceModal({ entity, onClose }: BOMTraceModalProps) {
       const res = await api.get(id);
       setDetailData(res.data);
       const allDefs = useDataStore.getState().customFieldDefs;
-      const entityType = type === 'part' ? 'part' : 'component';
+      const entityType = type === 'part' ? 'part' : 'assembly';
       const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes(entityType));
       setDetailCustomDefs(defs);
       if (defs.length > 0) {

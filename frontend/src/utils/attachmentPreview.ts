@@ -40,7 +40,7 @@ export async function previewAttachment(
   if (INLINE_EXTS.includes(ext)) {
     try {
       const mt = await mediaApi.token(attId, 'preview');
-      window.open(`/api/v2/attachments/${attId}/preview?token=${encodeURIComponent(mt)}`, '_blank');
+      window.open(`/api/attachments/${attId}/preview?token=${encodeURIComponent(mt)}`, '_blank');
     } catch (e) { alert(_permissionError(e) ? '无权限访问该附件' : '预览失败，请重试'); }
     return;
   }
@@ -72,7 +72,7 @@ export async function previewAttachment(
   if (BACKEND_PDF_OFFICE_EXTS.includes(ext)) {
     try {
       const mt = await mediaApi.token(attId, 'office-pdf');
-      window.open(`/api/v2/attachments/${attId}/office-pdf?token=${encodeURIComponent(mt)}`, '_blank');
+      window.open(`/api/attachments/${attId}/office-pdf?token=${encodeURIComponent(mt)}`, '_blank');
     } catch (e) { alert(_permissionError(e) ? '无权限访问该附件' : '预览失败，请重试'); }
     return;
   }

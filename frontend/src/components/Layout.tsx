@@ -24,11 +24,10 @@ const navItems: (NavItem | NavSeparator)[] = [
   { path: '/board', label: '用户看板', icon: '📋', roles: ['admin', 'engineer', 'production', 'guest'] },
   { path: '/bom', label: '管理工具', icon: '🛠️', roles: ['admin', 'engineer', 'production'] },
   { type: 'separator' },
-  { path: '/parts', label: '零件管理', icon: '🔧', roles: ['admin', 'engineer', 'production', 'guest'] },
-  { path: '/components', label: '部件管理', icon: '📦', roles: ['admin', 'engineer', 'production', 'guest'] },
+  { path: '/configuration', label: '构型管理', icon: '📐', roles: ['admin', 'engineer', 'production', 'guest'] },
+  { path: '/parts', label: '零部件管理', icon: '📦', roles: ['admin', 'engineer', 'production', 'guest'] },
   { path: '/documents', label: '图文档管理', icon: '📄', roles: ['admin', 'engineer', 'production', 'guest'] },
   { type: 'separator' },
-  { path: '/configuration', label: '构型管理', icon: '📐', roles: ['admin', 'engineer', 'production', 'guest'] },
   { path: '/ec', label: '变更管理', icon: '🔄', roles: ['admin', 'engineer', 'production', 'guest'] },
   { path: '/inventory', label: '库存管理', icon: '🏬', roles: ['admin', 'engineer', 'production', 'guest'] },
   { path: '/projects', label: '项目管理', icon: '🗂️', roles: ['admin', 'engineer', 'production'] },
@@ -49,9 +48,10 @@ export default function Layout() {
   const headerContent = usePageHeader((s) => s.content);
   const userRole = user?.role || 'guest';
 
-  // Auto-start sync on mount
+  // Auto-start sync after auth store is ready
+  const isAuthenticated = !!user;
   useEffect(() => {
-    if (autoSyncEnabled) {
+    if (autoSyncEnabled && isAuthenticated) {
       syncService.start();
     }
     return () => {

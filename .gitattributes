@@ -1,2 +1,9 @@
 conversion/wheels/*.whl filter=lfs diff=lfs merge=lfs -text
 conversion/conversion-service/target/**/*.jar filter=lfs diff=lfs merge=lfs -text
+conversion/tools/ifcconvert/IfcConvert filter=lfs diff=lfs merge=lfs -text
+conversion/tools/meshconv/meshconv filter=lfs diff=lfs merge=lfs -text
+conversion/tools/decimater/OpenMeshDecimater filter=lfs diff=lfs merge=lfs -text
+conversion/tools/decimater/lib/*.so* filter=lfs diff=lfs merge=lfs -text
+conversion/tools/decimater/lib/*.a filter=lfs diff=lfs merge=lfs -text
+*.sh text eol=lf
+backend/MayoConv-*.AppImage filter=lfs diff=lfs merge=lfs -text

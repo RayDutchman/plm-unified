@@ -5,6 +5,7 @@ export interface User {
   username: string;
   real_name: string;
   role: UserRole;
+  workspace_id: string;
   department?: string;
   phone?: string;
   status: string;

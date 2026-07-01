@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useAuthStore } from './stores/auth';
 import Layout from './components/Layout';
@@ -6,8 +6,7 @@ import { ToastContainer } from './components/Toast';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Board from './pages/Board';
-import Parts from './pages/Parts';
-import Components from './pages/Components';
+import PartMasters from './pages/PartMasters';
 import Documents from './pages/Documents';
 import BOM from './pages/BOM/BOM';
 import Users from './pages/Users';
@@ -20,11 +19,14 @@ import Projects from './pages/Project/Projects';
 import DataManagement from './pages/DataManagement';
 const STPViewer = lazy(() => import('./pages/STPViewer'));
 const OfficeReader = lazy(() => import('./pages/OfficeReader'));
+const ViewerPage = lazy(() => import('./pages/AssemblyViewerPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
+  const location = useLocation();
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // 把当前完整路径（含 query）作为 redirect 参数传给登录页
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
   return <>{children}</>;
 }
@@ -56,6 +58,16 @@ export default function App() {
           }
         />
         <Route
+          path="/viewer"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<div className="w-screen h-screen flex items-center justify-center bg-[#2a2a2e] text-gray-400">加载中...</div>}>
+                <ViewerPage />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/"
           element={
             <ProtectedRoute>
@@ -66,8 +78,7 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="board" element={<Board />} />
-          <Route path="parts" element={<Parts />} />
-          <Route path="components" element={<Components />} />
+          <Route path="parts" element={<PartMasters />} />
           <Route path="documents" element={<Documents />} />
           <Route path="configuration" element={<Configuration />} />
           <Route path="bom" element={<BOM />} />
