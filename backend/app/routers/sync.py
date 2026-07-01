@@ -20,6 +20,7 @@ from app.models.user import User
 from app.models.part import PartMaster, PartRevision, PartIteration
 from app.models.assembly import PartUsageLink, CADInstance
 from app.crud.part import get_part
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -217,6 +218,12 @@ def _sync_one_part(
                 status="WIP",
             )
             db.add(child_rev)
+            db.flush()
+            db.add(PartIteration(
+                part_revision_id=child_rev.id, iteration=1,
+                iteration_note="auto-created by sync",
+                author_id=user_id,
+            ))
             db.flush()
 
         link = PartUsageLink(
