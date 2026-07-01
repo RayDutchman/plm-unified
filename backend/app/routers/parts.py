@@ -99,18 +99,20 @@ def list_parts_endpoint(
             "updated_at": m.updated_at.isoformat() if m.updated_at else None,
             "deleted_at": m.deleted_at.isoformat() if m.deleted_at else None,
         } for m in masters]
+    # 一次查询获取所有最新版本，避免 N+1
+    master_ids = [m.id for m in masters]
+    revisions = db.query(PartRevision).filter(
+        PartRevision.part_master_id.in_(master_ids),
+        PartRevision.deleted_at.is_(None),
+    ).order_by(PartRevision.part_master_id, PartRevision.version.desc()).all()
+    # 为每个 master 取最新版本（按 master_id 分组，每组第一个即最新）
+    rev_map = {}
+    for rev in revisions:
+        if rev.part_master_id not in rev_map:
+            rev_map[rev.part_master_id] = rev
     result = []
     for m in masters:
-        # 取最新版本（version 字母倒序取第一）
-        rev = (
-            db.query(PartRevision)
-            .filter(
-                PartRevision.part_master_id == m.id,
-                PartRevision.deleted_at.is_(None),
-            )
-            .order_by(PartRevision.version.desc())
-            .first()
-        )
+        rev = rev_map.get(m.id)
         item = PartListItem.model_validate(m)
         if rev:
             item.latest_version = rev.version
