@@ -187,15 +187,15 @@ export function ECODetailModal({ ecoId, onClose, onRefresh, executionMode }: Pro
     try {
       const mt = await mediaApi.token(attId, 'direct-download');
       const a = document.createElement('a');
-      a.href = `/api/v2/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
+      a.href = `/api/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
       a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a);
     } catch { alert('下载失败，请重试'); }
   };
 
   const handleDocPreview = async (attId: string, fileName: string) => {
     const ext = fileName.split('.').pop()?.toLowerCase() || '';
-    if (ext === 'pdf') { try { const mt = await mediaApi.token(attId, 'preview'); window.open(`/api/v2/attachments/${attId}/preview?token=${encodeURIComponent(mt)}`, '_blank'); } catch { alert('预览失败，请重试'); } return; }
-    if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].includes(ext)) { try { const mt = await mediaApi.token(attId, 'preview'); window.open(`/api/v2/attachments/${attId}/preview?token=${encodeURIComponent(mt)}`, '_blank'); } catch { alert('预览失败，请重试'); } return; }
+    if (ext === 'pdf') { try { const mt = await mediaApi.token(attId, 'preview'); window.open(`/api/attachments/${attId}/preview?token=${encodeURIComponent(mt)}`, '_blank'); } catch { alert('预览失败，请重试'); } return; }
+    if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].includes(ext)) { try { const mt = await mediaApi.token(attId, 'preview'); window.open(`/api/attachments/${attId}/preview?token=${encodeURIComponent(mt)}`, '_blank'); } catch { alert('预览失败，请重试'); } return; }
     if (ext === 'stp' || ext === 'step') { try { const mt = await mediaApi.token(attId, 'gltf'); window.open(`/stp-viewer?id=${attId}&token=${encodeURIComponent(mt)}`, '_blank'); } catch { alert('预览失败，请重试'); } return; }
     alert('该格式暂不支持预览');
   };
