@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { partMasterApi, type PartMasterListItem, type PartMasterDetail } from '../services/partMasterApi';
+import { partMasterApi, type PartMasterListItem } from '../services/partMasterApi';
 import { customFieldsApi, assemblyPartsApi } from '../services/api';
 import type { CustomFieldDefinition, CustomFieldValue } from '../types';
 import { useDataStore } from '../stores/data';
@@ -8,7 +7,7 @@ import { Modal, ConfirmModal } from '../components/Modal';
 import EntityDocumentSection from '../components/EntityDocumentSection';
 import PartAttachmentBucket from '../components/PartAttachmentBucket';
 import AssemblyPartPicker from '../components/AssemblyPartPicker';
-import BOMTreeTable from '../components/BOMTreeTable';
+import PartMasterDetailModal from '../components/PartMasterDetailModal';
 
 const STATUS_MAP: Record<string, { label: string; cls: string }> = {
   WIP: { label: '草稿', cls: 'bg-blue-100 text-blue-800' },
@@ -60,19 +59,15 @@ export default function PartMasters() {
   const [editParts, setEditParts] = useState<any[]>([]);
   const [loadingEditParts, setLoadingEditParts] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const navigate = useNavigate();
+
   const componentCustomDefs = useMemo(() => {
     const allDefs = useDataStore.getState().customFieldDefs;
     return allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('part'));
   }, []);
   const [customFieldValuesMap, setCustomFieldValuesMap] = useState<Record<string, Record<string, unknown>>>({});
 
-  // 详情弹窗
-  const [viewing, setViewing] = useState<PartMasterDetail | null>(null);
-  const [viewLoading, setViewLoading] = useState(false);
-  const [viewCustomDefs, setViewCustomDefs] = useState<CustomFieldDefinition[]>([]);
-  const [viewCustomValues, setViewCustomValues] = useState<Record<string, unknown>>({});
-  const [detailTab, setDetailTab] = useState<'basic' | 'docs' | 'cad' | 'production' | 'bom' | 'versions'>('basic');
+  // 详情弹窗（复用共享的零部件详情组件，传入编号自加载）
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   const load = async (s = '') => {
     setLoading(true);
@@ -219,30 +214,7 @@ export default function PartMasters() {
     }
   };
 
-  const handleView = async (it: PartMasterListItem) => {
-    setViewing(null);
-    setViewLoading(true);
-    setDetailTab('basic');
-    try {
-      const res = await partMasterApi.get(it.number);
-      const detail = res.data ?? null;
-      setViewing(detail);
-      const allDefs = useDataStore.getState().customFieldDefs;
-      setViewCustomDefs(allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('part')));
-      if (detail) {
-        try {
-          const valuesRes = await customFieldsApi.getValues('part', detail.id);
-          const vals: Record<string, unknown> = {};
-          (valuesRes.data || []).forEach((v: CustomFieldValue) => { vals[v.field_id] = v.value; });
-          setViewCustomValues(vals);
-        } catch { setViewCustomValues({}); }
-      }
-    } catch {
-      setViewing(null);
-    } finally {
-      setViewLoading(false);
-    }
-  };
+  const handleView = (it: PartMasterListItem) => setViewingId(it.number);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -594,105 +566,8 @@ export default function PartMasters() {
         )}
       </Modal>
 
-      {/* 详情弹窗 */}
-      <Modal open={!!viewing || viewLoading} title="零部件详情" onClose={() => setViewing(null)} width="full">
-        {viewLoading ? (
-          <div className="py-8 text-center text-sm text-gray-400">加载中...</div>
-        ) : !viewing ? (
-          <div className="py-8 text-center text-sm text-gray-400">加载失败</div>
-        ) : (
-          <div>
-            <div className="flex gap-1 mb-4 border-b flex-wrap">
-              <TabBtn active={detailTab === 'basic'} onClick={() => setDetailTab('basic')}>基本信息</TabBtn>
-              <TabBtn active={detailTab === 'docs'} onClick={() => setDetailTab('docs')}>关联图文档</TabBtn>
-              <TabBtn active={detailTab === 'cad'} onClick={() => setDetailTab('cad')}>CAD附件</TabBtn>
-              <TabBtn active={detailTab === 'production'} onClick={() => setDetailTab('production')}>生产附件</TabBtn>
-              {viewing.childCount > 0 && <TabBtn active={detailTab === 'bom'} onClick={() => setDetailTab('bom')}>子项清单</TabBtn>}
-              {viewing.childCount === 0 && <TabBtn active={detailTab === 'bom'} onClick={() => setDetailTab('bom')}>子项清单</TabBtn>}
-              <TabBtn active={detailTab === 'versions'} onClick={() => setDetailTab('versions')}>版本历史</TabBtn>
-              <div className="ml-auto" />
-              <button
-                type="button"
-                onClick={() => navigate(`/viewer?part=${encodeURIComponent(viewing.number)}&version=${encodeURIComponent(viewing.latestVersion)}`)}
-                className="px-3 py-1.5 text-xs border border-blue-500 text-blue-500 rounded-md hover:bg-blue-50 transition-colors"
-                title="3D 装配体预览"
-              >
-                📦 3D预览
-              </button>
-            </div>
-
-            {detailTab === 'basic' && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <InfoItem label="编号" value={viewing.number} />
-                  <InfoItem label="名称" value={viewing.name} />
-                  <StatusItem label="状态" status={viewing.latestStatus} />
-                  <InfoItem label="版本" value={viewing.latestVersion} />
-                  <InfoItem label="类型" value={viewing.type || '-'} />
-                  <InfoItem label="标准件" value={viewing.standardPart ? '是' : '否'} />
-                  <InfoItem label="签出人" value={viewing.checkoutUserId || '-'} />
-                </div>
-                {viewCustomDefs.length > 0 && (
-                  <div className="border-t pt-4">
-                    <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {viewCustomDefs.map(def => (
-                        <InfoItem key={def.id} label={def.name}
-                          value={String(def.field_type === 'select'
-                            ? (def.options || []).find(o => o === viewCustomValues[def.id]) || viewCustomValues[def.id] || '-'
-                            : viewCustomValues[def.id] ?? '-')} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {detailTab === 'docs' && (
-              <EntityDocumentSection entityType="assembly" entityId={viewing.id} entityCode={viewing.number} entityName={viewing.name} editable={false} />
-            )}
-
-            {detailTab === 'cad' && (
-              <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false} />
-            )}
-
-            {detailTab === 'production' && (
-              <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} />
-            )}
-
-            {detailTab === 'bom' && (
-              <div>
-                <h4 className="text-sm font-bold text-gray-700 mb-2">子项清单 ({viewing.childCount})</h4>
-                {viewing.childCount === 0 ? (
-                  <div className="text-sm text-gray-400 py-4 text-center">暂无子项</div>
-                ) : (
-                  <BOMTreeTable assemblyId={viewing.id} />
-                )}
-              </div>
-            )}
-
-            {detailTab === 'versions' && (
-              <div className="space-y-2">
-                {viewing.revisions?.map((r) => (
-                  <div key={r.version} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center gap-3">
-                    <span className="text-sm font-medium">{r.version}</span>
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${statusTag(r.status).cls}`}>{statusTag(r.status).label}</span>
-                    <span className="text-sm text-gray-500">{r.iterations.length} 次迭代</span>
-                    {r.iterations.map((it) => (
-                      <span key={it.iteration} className="text-xs text-gray-400">
-                        #{it.iteration} {it.iterationNote ? `· ${it.iterationNote}` : ''} {it.checkInDate ? `· ${new Date(it.checkInDate).toLocaleDateString('zh-CN')}` : ''}
-                      </span>
-                    ))}
-                  </div>
-                ))}
-                {(!viewing.revisions || viewing.revisions.length === 0) && (
-                  <div className="text-sm text-gray-400 py-4 text-center">暂无版本记录</div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
+      {/* 详情弹窗（共享组件） */}
+      <PartMasterDetailModal identifier={viewingId} onClose={() => setViewingId(null)} />
 
       <ConfirmModal
         open={!!deleteId}
@@ -703,25 +578,6 @@ export default function PartMasters() {
         onConfirm={handleDelete}
         onCancel={() => setDeleteId(null)}
       />
-    </div>
-  );
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-      <div className="text-xs text-gray-500 mb-0.5">{label}</div>
-      <div className="text-sm text-gray-900 font-medium whitespace-pre-wrap">{value}</div>
-    </div>
-  );
-}
-
-function StatusItem({ label, status: s }: { label: string; status: string }) {
-  const tag = statusTag(s);
-  return (
-    <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-      <div className="text-xs text-gray-500 mb-0.5">{label}</div>
-      <span className={`inline-block px-2 py-0.5 text-xs rounded-full ${tag.cls}`}>{tag.label}</span>
     </div>
   );
 }

@@ -40,6 +40,23 @@ from app.schemas.part import (
 
 router = APIRouter(prefix="/api/parts", tags=["零件管理"])
 
+# PartRevision.status（大写）→ 前端使用的小写枚举
+_PART_STATUS_MAP = {"WIP": "draft", "FROZEN": "frozen", "RELEASED": "released", "OBSOLETE": "obsolete"}
+
+
+def _latest_version_status(db: Session, part_master_id):
+    """取零件最新版本（version 字母倒序第一）的 version 与归一化 status。"""
+    from app.models.part import PartRevision
+    rev = (
+        db.query(PartRevision)
+        .filter(PartRevision.part_master_id == part_master_id, PartRevision.deleted_at.is_(None))
+        .order_by(PartRevision.version.desc())
+        .first()
+    )
+    if not rev:
+        return "", ""
+    return rev.version, _PART_STATUS_MAP.get(rev.status, (rev.status or "").lower())
+
 
 # ---------------------------------------------------------------------------
 # 1.6 CRUD 端点
@@ -346,6 +363,7 @@ def list_part_children(
             ).order_by(PartUsageLink.order).all()
             for link in links:
                 child_master = db.get(PartMaster, link.component_master_id)
+                c_version, c_status = _latest_version_status(db, link.component_master_id) if child_master else ("", "")
                 result.append({
                     "id": str(link.id),
                     "childType": "part" if not _has_children(db, link.component_master_id) else "component",
@@ -357,6 +375,8 @@ def list_part_children(
                         "code": child_master.number if child_master else "?",
                         "name": child_master.name if child_master else "?",
                         "spec": child_master.type or "",
+                        "version": c_version,
+                        "status": c_status,
                     } if child_master else None,
                     "created_at": "",
                 })
