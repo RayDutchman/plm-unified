@@ -88,7 +88,7 @@ export default function PartAttachmentBucket({ partId, category, label, editable
     try {
       const mt = await mediaApi.token(attId, 'direct-download');
       const a = document.createElement('a');
-      a.href = `/api/v2/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
+      a.href = `/api/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
       a.download = fileName || 'download';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
     } catch { alert('下载失败，请重试'); }

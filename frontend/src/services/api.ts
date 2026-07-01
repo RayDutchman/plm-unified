@@ -255,9 +255,9 @@ export const entityDocumentsApi = {
 
 // 附件下载
 export const attachmentApi = {
-  download: (id: string) => api.get(`/v2/attachments/${id}/download`, { responseType: 'blob' }),
+  download: (id: string) => api.get(`/attachments/${id}/download`, { responseType: 'blob' }),
   archiveTree: (id: string, token: string) =>
-    api.get<import('../types').ArchiveTreeResponse>(`/v2/attachments/${id}/archive-tree`, { params: { token } }),
+    api.get<import('../types').ArchiveTreeResponse>(`/attachments/${id}/archive-tree`, { params: { token } }),
 };
 
 // 部件附件 API
@@ -277,7 +277,7 @@ export const partAttachmentsApi = {
 // 媒体令牌 API（替代 ?token= 的会话 JWT）
 export const mediaApi = {
   token: (attId: string, action: 'preview' | 'direct-download' | 'gltf' | 'archive-tree' | 'extract-file' | 'office-pdf') =>
-    api.get(`/v2/attachments/${attId}/media-token`, { params: { action } }).then(r => r.data.token as string),
+    api.get(`/attachments/${attId}/media-token`, { params: { action } }).then(r => r.data.token as string),
 };
 
 // ============================================================
@@ -321,7 +321,7 @@ export const v2UploadApi = {
     formData.append('entity_id', entityId);
     if (category) formData.append('category', category);
 
-    return uploadAxios.post('/v2/attachments/upload', formData, {
+    return uploadAxios.post('/attachments/upload', formData, {
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
@@ -353,7 +353,7 @@ export const v2UploadApi = {
     formData.append('entity_id', entityId);
     if (category) formData.append('category', category);
 
-    return uploadAxios.post('/v2/attachments/chunk/init', formData)
+    return uploadAxios.post('/attachments/chunk/init', formData)
       .then(res => res.data);
   },
 
@@ -378,7 +378,7 @@ export const v2UploadApi = {
     formData.append('chunk_index', String(chunkIndex));
     formData.append('chunk', chunk);
 
-    return uploadAxios.post('/v2/attachments/chunk/upload', formData, {
+    return uploadAxios.post('/attachments/chunk/upload', formData, {
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
@@ -402,7 +402,7 @@ export const v2UploadApi = {
     const formData = new FormData();
     formData.append('upload_id', uploadId);
 
-    return uploadAxios.post('/v2/attachments/chunk/complete', formData)
+    return uploadAxios.post('/attachments/chunk/complete', formData)
       .then(res => res.data);
   },
 };

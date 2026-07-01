@@ -57,7 +57,7 @@ export default function DocumentDetailContent({ doc, customFieldDefs, customFiel
     try {
       const mt = await mediaApi.token(attId, 'direct-download');
       const a = document.createElement('a');
-      a.href = `/api/v2/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
+      a.href = `/api/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();

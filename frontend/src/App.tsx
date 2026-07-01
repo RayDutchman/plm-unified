@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useAuthStore } from './stores/auth';
 import Layout from './components/Layout';
@@ -19,11 +19,14 @@ import Projects from './pages/Project/Projects';
 import DataManagement from './pages/DataManagement';
 const STPViewer = lazy(() => import('./pages/STPViewer'));
 const OfficeReader = lazy(() => import('./pages/OfficeReader'));
+const ViewerPage = lazy(() => import('./pages/AssemblyViewerPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore();
+  const location = useLocation();
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // 把当前完整路径（含 query）作为 redirect 参数传给登录页
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
   return <>{children}</>;
 }
@@ -50,6 +53,16 @@ export default function App() {
             <ProtectedRoute>
               <Suspense fallback={<div className="w-screen h-screen flex items-center justify-center text-gray-400">加载中...</div>}>
                 <OfficeReader />
+              </Suspense>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/viewer"
+          element={
+            <ProtectedRoute>
+              <Suspense fallback={<div className="w-screen h-screen flex items-center justify-center bg-[#2a2a2e] text-gray-400">加载中...</div>}>
+                <ViewerPage />
               </Suspense>
             </ProtectedRoute>
           }
