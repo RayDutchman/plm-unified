@@ -447,8 +447,8 @@ export default function Projects() {
             isOverdue={overdue} variant="table" />
         </td>
         <td className="px-2 py-2" style={{ width: ASSIGNEE_W }}><TaskAssigneeCell assigneeName={t.assignee_name} variant="table" /></td>
-        <td className="px-2 py-2">
-          <span className={`px-2 py-0.5 text-xs rounded-full ${TASK_STATUS_CLASS[t.status]}`}>{t.status}</span>
+        <td className="px-1 py-2">
+          <span className={`px-1.5 py-0.5 text-xs rounded-full whitespace-nowrap ${TASK_STATUS_CLASS[t.status]}`}>{t.status}</span>
         </td>
         <td className="px-2 py-2 text-sm">{t.priority}</td>
         <td className="px-2 py-2 text-sm text-gray-500">{t.planned_start || '—'}</td>
@@ -658,8 +658,8 @@ export default function Projects() {
                                 </span>
                               </td>
                               <td className="px-2 py-2 text-sm" style={{ width: ASSIGNEE_W }}>{currentProject.owner_name}</td>
-                              <td className="px-2 py-2">
-                                <span className={`px-2 py-0.5 text-xs rounded-full ${STATUS_CLASS[currentProject.status]}`}>{currentProject.status}</span>
+                              <td className="px-1 py-2">
+                                <span className={`px-1.5 py-0.5 text-xs rounded-full whitespace-nowrap ${STATUS_CLASS[currentProject.status]}`}>{currentProject.status}</span>
                               </td>
                               <td className="px-2 py-2 text-sm text-gray-400">—</td>
                               <td className="px-2 py-2 text-sm text-gray-500">{currentProject.planned_start || '—'}</td>
