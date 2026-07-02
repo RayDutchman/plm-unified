@@ -572,7 +572,9 @@ export default function Projects() {
                   <span className={`px-2 py-0.5 text-xs rounded-full ${STATUS_CLASS[currentProject.status]}`}>{currentProject.status}</span>
                   <span className="text-sm text-gray-500">负责人 {currentProject.owner_name}</span>
                   <div className="flex-1" />
-                  <button onClick={() => setMemberOpen(true)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-white">成员管理</button>
+                  {isManager && (
+                    <button onClick={() => setMemberOpen(true)} className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-white">成员管理</button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 mb-3 shrink-0">
@@ -587,29 +589,35 @@ export default function Projects() {
                     <option value="">全部状态</option>
                     {(['未开始', '进行中', '已完成', '挂起'] as TaskStatus[]).map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
-                  <button onClick={() => {
-                    const ids = new Set<string>();
-                    const collect = (ts: ProjectTask[]) => { for (const t of ts) { if (t.children?.length) { ids.add(t.id); collect(t.children); } } };
+                  {(() => {
+                    // 合并展开/折叠为一个切换按钮:全部已展开时显示"全部折叠",否则显示"全部展开"
+                    const allIds: string[] = [];
+                    const collect = (ts: ProjectTask[]) => { for (const t of ts) { if (t.children?.length) { allIds.push(t.id); collect(t.children); } } };
                     collect(tasks);
-                    setExpanded(ids);
-                  }} className="px-2 py-1.5 text-xs rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">全部展开</button>
-                  <button onClick={() => setExpanded(new Set())} className="px-2 py-1.5 text-xs rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">全部折叠</button>
+                    const allExpanded = allIds.length > 0 && allIds.every((id) => expanded.has(id));
+                    return (
+                      <button onClick={() => setExpanded(allExpanded ? new Set() : new Set(allIds))}
+                        className="px-2 py-1.5 text-sm rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">
+                        {allExpanded ? '全部折叠' : '全部展开'}
+                      </button>
+                    );
+                  })()}
                   {viewMode === 'table' ? (
-                    <button onClick={() => setViewMode('gantt')} className="px-2 py-1.5 text-xs rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">甘特图</button>
+                    <button onClick={() => setViewMode('gantt')} className="px-2 py-1.5 text-sm rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">甘特图</button>
                   ) : (
-                    <button onClick={() => setViewMode('table')} className="px-2 py-1.5 text-xs rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">计划表</button>
+                    <button onClick={() => setViewMode('table')} className="px-2 py-1.5 text-sm rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-50">计划表</button>
                   )}
                   {viewMode === 'gantt' && (
                     <>
                       <span className="text-sm text-gray-400">视图:</span>
                       {(['day', 'week', 'month'] as const).map((s) => (
                         <button key={s} onClick={() => setGanttScale(s)}
-                          className={`px-2 py-1.5 text-xs rounded ${ganttScale === s ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                          className={`px-2 py-1.5 text-sm rounded ${ganttScale === s ? 'bg-primary-600 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                           {s === 'day' ? '日' : s === 'week' ? '周' : '月'}
                         </button>
                       ))}
                       {can('project.task:depend') && (
-                        <button onClick={() => setAutoScheduleKey((k) => k + 1)} className="px-2 py-1.5 text-xs rounded bg-primary-600 text-white hover:bg-primary-700">刷新排期</button>
+                        <button onClick={() => setAutoScheduleKey((k) => k + 1)} className="px-2 py-1.5 text-sm rounded bg-primary-600 text-white hover:bg-primary-700">刷新排期</button>
                       )}
                     </>
                   )}
@@ -656,7 +664,9 @@ export default function Projects() {
                               <td className="px-2 py-2 text-sm text-gray-500">{currentProject.planned_start || '—'}</td>
                               <td className="px-2 py-2 text-sm text-gray-500">{currentProject.planned_end || '—'}</td>
                               <td className="px-4 py-2 text-right text-gray-400">
-                                <button onClick={() => setMemberOpen(true)} className="text-primary-600 text-sm mr-2">成员</button>
+                                {isManager && (
+                                  <button onClick={() => setMemberOpen(true)} className="text-primary-600 text-sm mr-2">成员</button>
+                                )}
                                 {can('project:update') && (
                                   <button onClick={(e) => handleOpenEdit(currentProject, e)} className="text-primary-600 text-sm">编辑</button>
                                 )}

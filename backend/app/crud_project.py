@@ -99,7 +99,22 @@ def add_member(db: Session, project_id: uuid.UUID, data: MemberAdd) -> ProjectMe
     return m
 
 
+def set_member_role(db: Session, project_id: uuid.UUID, user_id: uuid.UUID, role: str) -> ProjectMember:
+    m = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id, ProjectMember.user_id == user_id
+    ).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="成员不存在")
+    m.role_in_project = role
+    db.commit(); db.refresh(m)
+    return m
+
+
 def remove_member(db: Session, project_id: uuid.UUID, user_id: uuid.UUID):
+    # 移除成员时,清空其在本项目任务上的负责人,避免"非成员却是负责人"的悬空状态
+    db.query(ProjectTask).filter(
+        ProjectTask.project_id == project_id, ProjectTask.assignee_id == user_id
+    ).update({ProjectTask.assignee_id: None}, synchronize_session=False)
     db.query(ProjectMember).filter(
         ProjectMember.project_id == project_id, ProjectMember.user_id == user_id
     ).delete()
@@ -134,6 +149,13 @@ def get_active_task(db: Session, task_id: uuid.UUID, project_id: uuid.UUID = Non
     return t
 
 
+def _validate_assignee(db: Session, project_id: uuid.UUID, assignee_id) -> None:
+    """负责人必须是项目成员(owner 创建时已自动入组为成员)。空值表示不指派,放行。"""
+    aid = _uuid(assignee_id)
+    if aid and not is_member(db, project_id, aid):
+        raise HTTPException(status_code=400, detail="负责人必须是项目成员")
+
+
 def _enforce_milestone_single_day(t: ProjectTask):
     """里程碑为时间点:计划起止强制同一天(以开始日为准,缺开始则用结束)。"""
     if t.task_type == "里程碑":
@@ -144,6 +166,7 @@ def _enforce_milestone_single_day(t: ProjectTask):
 
 
 def create_task(db: Session, project: Project, data: TaskCreate) -> ProjectTask:
+    _validate_assignee(db, project.id, data.assignee_id)
     parent_id = _uuid(data.parent_id)
     if parent_id:
         get_task(db, parent_id)
@@ -173,6 +196,7 @@ def update_task(db: Session, t: ProjectTask, data: TaskEdit, actor: dict = None)
         if val is not None:
             setattr(t, field, val)
     if data.assignee_id is not None:
+        _validate_assignee(db, t.project_id, data.assignee_id)
         t.assignee_id = _uuid(data.assignee_id)
     _enforce_milestone_single_day(t)
     db.commit(); db.refresh(t)

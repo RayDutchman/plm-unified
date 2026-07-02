@@ -14,6 +14,8 @@ export const projectApi = {
   addMember: (id: string, data: { user_id: string; role_in_project?: string }) =>
     api.post(`${base}/${id}/members`, data),
   removeMember: (id: string, userId: string) => api.delete(`${base}/${id}/members/${userId}`),
+  setMemberRole: (id: string, userId: string, role: string) =>
+    api.patch(`${base}/${id}/members/${userId}`, { role_in_project: role }),
   listTasks: (id: string) => api.get(`${base}/${id}/tasks`),
   createTask: (id: string, data: any) => api.post(`${base}/${id}/tasks`, data),
   updateTask: (id: string, taskId: string, data: any) => api.put(`${base}/${id}/tasks/${taskId}`, data),

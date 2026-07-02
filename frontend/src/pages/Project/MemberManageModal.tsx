@@ -11,10 +11,13 @@ interface Props {
   onClose: () => void;
 }
 
+const ROLES = ['经理', '成员'];
+
 export default function MemberManageModal({ open, projectId, ownerId, onClose }: Props) {
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [users, setUsers] = useState<{ id: string; real_name: string; username: string }[]>([]);
   const [pickUser, setPickUser] = useState('');
+  const [pickRole, setPickRole] = useState('成员');
 
   const load = async () => {
     const res = await projectApi.listMembers(projectId);
@@ -29,14 +32,32 @@ export default function MemberManageModal({ open, projectId, ownerId, onClose }:
 
   const handleAdd = async () => {
     if (!pickUser) return;
-    await projectApi.addMember(projectId, { user_id: pickUser });
-    setPickUser('');
-    load();
+    try {
+      await projectApi.addMember(projectId, { user_id: pickUser, role_in_project: pickRole });
+      setPickUser('');
+      setPickRole('成员');
+      load();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || '添加成员失败');
+    }
   };
 
   const handleRemove = async (userId: string) => {
-    await projectApi.removeMember(projectId, userId);
-    load();
+    try {
+      await projectApi.removeMember(projectId, userId);
+      load();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || '移除成员失败');
+    }
+  };
+
+  const handleRoleChange = async (userId: string, role: string) => {
+    try {
+      await projectApi.setMemberRole(projectId, userId, role);
+      load();
+    } catch (err: any) {
+      alert(err?.response?.data?.detail || '调整角色失败');
+    }
   };
 
   const memberIds = new Set(members.map((m) => m.user_id));
@@ -51,19 +72,34 @@ export default function MemberManageModal({ open, projectId, ownerId, onClose }:
             <option key={u.id} value={u.id}>{u.real_name}（{u.username}）</option>
           ))}
         </select>
+        <select value={pickRole} onChange={(e) => setPickRole(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg">
+          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
         <button onClick={handleAdd} className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">添加</button>
       </div>
       <div className="divide-y">
-        {members.map((m) => (
-          <div key={m.id} className="flex items-center gap-2 py-2">
-            <span className="font-medium">{m.user_name}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">{m.role_in_project}</span>
-            <div className="flex-1" />
-            {m.user_id !== ownerId && (
-              <button onClick={() => handleRemove(m.user_id)} className="text-red-600 text-sm hover:underline">移除</button>
-            )}
-          </div>
-        ))}
+        {members.map((m) => {
+          const isOwner = m.user_id === ownerId;
+          return (
+            <div key={m.id} className="flex items-center gap-2 py-2">
+              <span className="font-medium">{m.user_name}</span>
+              {isOwner ? (
+                // owner 恒为项目负责人(经理),角色不可改
+                <span className="text-xs px-2 py-0.5 rounded bg-primary-50 text-primary-700">负责人</span>
+              ) : (
+                <select value={m.role_in_project} onChange={(e) => handleRoleChange(m.user_id, e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-1.5 py-0.5 text-gray-600">
+                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              )}
+              <div className="flex-1" />
+              {!isOwner && (
+                <button onClick={() => handleRemove(m.user_id)} className="text-red-600 text-sm hover:underline">移除</button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </Modal>
   );
