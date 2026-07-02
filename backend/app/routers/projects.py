@@ -427,6 +427,7 @@ def _project_brief(db, p):
     member_count = len(crud_project.list_members(db, p.id))
     return {"id": str(p.id), "code": p.code, "name": p.name, "status": p.status,
             "owner_id": str(p.owner_id), "owner_name": owner.real_name if owner else "",
+            "description": p.description,
             "planned_start": p.planned_start, "planned_end": p.planned_end,
             "member_count": member_count, "created_at": p.created_at.isoformat() if p.created_at else None}
 

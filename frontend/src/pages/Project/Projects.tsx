@@ -580,7 +580,7 @@ export default function Projects() {
                 </div>
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden flex-1 min-h-0">
-                  <div className="overflow-y-auto h-full bg-white"
+                  <div className="overflow-y-auto h-full bg-white" style={{ overflowX: 'hidden' }}
                        onDragLeave={() => { setDragOver(null); if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; } }}>
                     <div className="flex">
                       <SharedLeftPanel
@@ -595,11 +595,12 @@ export default function Projects() {
                       />
                       {viewMode === 'table' ? (
                         <div className="flex-1 bg-white">
-                          <div className="bg-gray-50 border-b border-gray-200 flex items-center text-sm font-medium text-gray-500 sticky top-0 z-10" style={{ height: 36 }}>
+                           <div className="bg-gray-50 border-b border-gray-200 flex items-center text-sm font-medium text-gray-500 sticky top-0 z-10" style={{ height: 36 }}>
                             <span className="px-2 shrink-0 truncate text-left" style={{ width: 64 }}>优先级</span>
                             <span className="px-2 shrink-0 truncate text-left" style={{ width: 100 }}>计划开始</span>
                             <span className="px-2 shrink-0 truncate text-left" style={{ width: 100 }}>计划完成</span>
-                            <span className="flex-1 px-4 text-right">关联/操作</span>
+                            <span className="px-2 flex-1 min-w-0 truncate text-left">描述</span>
+                            <span className="shrink-0 px-4 text-right">关联/操作</span>
                           </div>
                           {currentProject && (
                             <>
@@ -607,7 +608,8 @@ export default function Projects() {
                                 <span className="px-2 shrink-0 truncate text-gray-400" style={{ width: 64 }}>—</span>
                                 <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{currentProject.planned_start || '—'}</span>
                                 <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{currentProject.planned_end || '—'}</span>
-                                <div className="flex-1 flex items-center justify-end px-4 text-gray-400">
+                                <span className="px-2 flex-1 min-w-0 truncate text-gray-500" title={currentProject.description || undefined}>{currentProject.description || '—'}</span>
+                                <div className="shrink-0 flex items-center justify-end px-4 text-gray-400">
                                   {isManager && (
                                     <button onClick={() => setMemberOpen(true)} className="text-primary-600 text-sm mr-2">成员</button>
                                   )}
@@ -642,7 +644,8 @@ export default function Projects() {
                                         <span className="px-2 shrink-0 truncate" style={{ width: 64 }}>{t.priority}</span>
                                         <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_start || '—'}</span>
                                         <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_end || '—'}</span>
-                                        <div className="flex-1 flex items-center justify-end px-4 text-gray-400" onClick={(e) => e.stopPropagation()}>
+                                        <span className="px-2 flex-1 min-w-0 truncate text-gray-500" title={t.description || undefined}>{t.description || '—'}</span>
+                                        <div className="shrink-0 flex items-center justify-end px-4 text-gray-400" onClick={(e) => e.stopPropagation()}>
                                           {(t.link_count ?? 0) > 0 && <span className="mr-2">🔗 {t.link_count}</span>}
                                           {isManager && <button onClick={() => openCreate(t.id)} className="text-primary-600 text-sm mr-2">+子</button>}
                                           {can('project.task:delete') && <button onClick={() => setDelTask(t)} className="text-red-600 text-sm">删除</button>}
