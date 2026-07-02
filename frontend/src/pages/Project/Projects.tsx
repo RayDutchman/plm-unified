@@ -9,9 +9,8 @@ import { useHeaderTabs } from '../../hooks/useHeaderTabs';
 import MemberManageModal from './MemberManageModal';
 import TaskEditModal from './TaskEditModal';
 import GanttView from './gantt/GanttView';
-import { TaskCodeCell, TaskNameCell, TaskAssigneeCell } from './TaskRowCells';
-import { CODE_W, ASSIGNEE_W, STATUS_W, LEFT_W } from './gantt/ganttUtils';
-import type { Project, ProjectStatus, ProjectTask, TaskStatus, TaskLink, TaskComment } from '../../types/project';
+import SharedLeftPanel from './SharedLeftPanel';
+import type { Project, ProjectStatus, ProjectTask, TaskStatus, TaskLink, TaskComment, GanttTask } from '../../types/project';
 
 const STATUSES: ProjectStatus[] = ['待启动', '进行中', '已完成', '已暂停', '已归档'];
 const STATUS_CLASS: Record<ProjectStatus, string> = {
@@ -70,6 +69,7 @@ export default function Projects() {
   const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table');
   const [ganttScale, setGanttScale] = useState<'day' | 'week' | 'month'>('day');
   const [autoScheduleKey, setAutoScheduleKey] = useState(0);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [delTask, setDelTask] = useState<ProjectTask | null>(null);
   const [taskStatusFilter, setTaskStatusFilter] = useState('');
   const [taskSearch, setTaskSearch] = useState('');
@@ -261,6 +261,37 @@ export default function Projects() {
     setExpanded(next);
   };
 
+  // 将树形任务扁平化为 GanttTask[]，供 SharedLeftPanel 统一使用
+  const { flatTasks, childMap, visibleLeftTasks } = useMemo(() => {
+    const flat: GanttTask[] = [];
+    const cm: Record<string, GanttTask[]> = {};
+    const walk = (ts: ProjectTask[], parentId: string | null, depth: number) => {
+      for (const t of ts) {
+        const gt: GanttTask = {
+          id: t.id, parent_id: parentId, code: t.code, name: t.name,
+          task_type: t.task_type, status: t.status as TaskStatus,
+          assignee_name: t.assignee_name,
+          planned_start: t.planned_start ?? null, planned_end: t.planned_end ?? null,
+          duration_days: null, is_critical: false,
+          is_overdue: isOverdue(t), sort_order: t.sort_order, depth,
+        };
+        flat.push(gt);
+        if (!cm[parentId ?? '__root__']) cm[parentId ?? '__root__'] = [];
+        cm[parentId ?? '__root__'].push(gt);
+        if (t.children && t.children.length > 0) walk(t.children, t.id, depth + 1);
+      }
+    };
+    walk(tasks, null, 0);
+    const vis: GanttTask[] = [];
+    const walkVis = (task: GanttTask) => {
+      vis.push(task);
+      const children = cm[task.id];
+      if (children && expanded.has(task.id)) for (const ch of children) walkVis(ch);
+    };
+    (cm['__root__'] || []).forEach(walkVis);
+    return { flatTasks: flat, childMap: cm, visibleLeftTasks: vis };
+  }, [tasks, expanded]);
+
   // ---- Drag & Drop ----
   const expandNode = useCallback((tid: string) => {
     if (!expanded.has(tid)) {
@@ -396,86 +427,6 @@ export default function Projects() {
     if (taskMatchesSelf(t)) return true;
     return (t.children || []).some(c => subtreeHasMatch(c));
   }, [taskMatchesSelf]);
-
-  const renderRow = (t: ProjectTask, depth: number): JSX.Element[] => {
-    if (taskStatusFilter && t.status !== taskStatusFilter) {
-      return (t.children || []).flatMap((c) => renderRow(c, depth));
-    }
-    if (taskSearch && !subtreeHasMatch(t)) {
-      return [];
-    }
-    const hasChildren = (t.children?.length || 0) > 0;
-    const isOpen = expanded.has(t.id);
-    const overdue = isOverdue(t);
-    const isDragAbove = dragOver?.taskId === t.id && dragOver?.position === 'above';
-    const isDragBelow = dragOver?.taskId === t.id && dragOver?.position === 'below';
-    const isDragInto = dragOver?.taskId === t.id && dragOver?.position === 'into';
-    const isDragging = dragTask?.id === t.id;
-
-    const rows: JSX.Element[] = [];
-
-    if (isDragAbove) {
-      rows.push(
-        <tr key={t.id + '-above'} className="h-1">
-          <td colSpan={8} className="p-0 border-0">
-            <div className="h-1 bg-primary-500 rounded-full mx-1" />
-          </td>
-        </tr>
-      );
-    }
-
-    rows.push(
-      <tr
-        key={t.id}
-        draggable
-        onDragStart={(e) => handleDragStart(t, e)}
-        onDragEnd={handleDragEnd}
-        onDragOver={(e) => handleDragOver(t, e)}
-        onDragLeave={handleDragLeave}
-        onDrop={(e) => handleDrop(t, e)}
-        onClick={() => openEdit(t)}
-        className={`${overdue ? 'bg-red-50' : 'hover:bg-gray-50'} cursor-pointer transition-colors ${
-          isDragInto ? 'bg-blue-50 ring-2 ring-primary-300 ring-inset' : ''
-        } ${isDragging ? 'opacity-40' : ''}`}
-      >
-        <td className="pl-2 pr-4 py-2" onClick={(e) => e.stopPropagation()} style={{ width: CODE_W }}>
-          <TaskCodeCell code={t.code} depth={depth} hasChildren={hasChildren}
-            isExpanded={isOpen} onToggle={() => toggle(t.id)} variant="table" />
-        </td>
-        <td className="px-1 py-2">
-          <TaskNameCell name={t.name} taskType={t.task_type}
-            isOverdue={overdue} variant="table" />
-        </td>
-        <td className="px-2 py-2" style={{ width: ASSIGNEE_W }}><TaskAssigneeCell assigneeName={t.assignee_name} variant="table" /></td>
-        <td className="px-1 py-2">
-          <span className={`px-1.5 py-0.5 text-xs rounded-full whitespace-nowrap ${TASK_STATUS_CLASS[t.status]}`}>{t.status}</span>
-        </td>
-        <td className="px-2 py-2 text-sm">{t.priority}</td>
-        <td className="px-2 py-2 text-sm text-gray-500">{t.planned_start || '—'}</td>
-        <td className="px-2 py-2 text-sm text-gray-500">{t.planned_end || '—'}</td>
-        <td className="px-4 py-2 text-right text-gray-400" onClick={(e) => e.stopPropagation()}>
-          {(t.link_count ?? 0) > 0 && <span className="mr-2">🔗 {t.link_count}</span>}
-          {isManager && <button onClick={() => openCreate(t.id)} className="text-primary-600 text-sm mr-2">+子</button>}
-          {can('project.task:delete') && <button onClick={() => setDelTask(t)} className="text-red-600 text-sm">删除</button>}
-        </td>
-      </tr>
-    );
-
-    if (isDragBelow) {
-      rows.push(
-        <tr key={t.id + '-below'} className="h-1">
-          <td colSpan={8} className="p-0 border-0">
-            <div className="h-1 bg-primary-500 rounded-full mx-1" />
-          </td>
-        </tr>
-      );
-    }
-
-    if (hasChildren && isOpen) {
-      for (const c of t.children!) rows.push(...renderRow(c, depth + 1));
-    }
-    return rows;
-  };
 
   // ---- Render ----
   return (
@@ -628,77 +579,100 @@ export default function Projects() {
                   )}
                 </div>
 
-                {viewMode === 'table' ? (
-                  <div className="bg-white rounded-lg border border-gray-200 overflow-y-auto flex-1 min-h-0"
+                <div className="border border-gray-200 rounded-lg overflow-hidden flex-1 min-h-0">
+                  <div className="overflow-y-auto h-full bg-white"
                        onDragLeave={() => { setDragOver(null); if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; } }}>
-                    <table className="w-full text-sm table-fixed">
-                      <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
-                        <tr>
-                          <th className="text-left pl-2 pr-4 py-2 text-sm font-medium text-gray-500 whitespace-nowrap" style={{ width: CODE_W }}>任务编号</th>
-                          <th className="text-left px-1 py-2 text-sm font-medium text-gray-500" style={{ width: LEFT_W - CODE_W - ASSIGNEE_W - STATUS_W }}>任务名称</th>
-                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500" style={{ width: ASSIGNEE_W }}>负责人</th>
-                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500" style={{ width: STATUS_W }}>状态</th>
-                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">优先级</th>
-                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">计划开始</th>
-                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">计划完成</th>
-                          <th className="text-right px-4 py-2 text-sm font-medium text-gray-500">关联/操作</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {currentProject && (
-                          <>
-                            <tr className="bg-gray-50">
-                              <td className="pl-2 pr-4 py-2 whitespace-nowrap" style={{ width: CODE_W }}>
-                                <span className="font-semibold">{currentProject.code}</span>
-                              </td>
-                              <td className="px-1 py-2">
-                                <span className="inline-flex items-center gap-1">
-                                  <span>📁</span>
-                                  <span className="font-medium">{currentProject.name}</span>
-                                </span>
-                              </td>
-                              <td className="px-2 py-2 text-sm" style={{ width: ASSIGNEE_W }}>{currentProject.owner_name}</td>
-                              <td className="px-1 py-2">
-                                <span className={`px-1.5 py-0.5 text-xs rounded-full whitespace-nowrap ${STATUS_CLASS[currentProject.status]}`}>{currentProject.status}</span>
-                              </td>
-                              <td className="px-2 py-2 text-sm text-gray-400">—</td>
-                              <td className="px-2 py-2 text-sm text-gray-500">{currentProject.planned_start || '—'}</td>
-                              <td className="px-2 py-2 text-sm text-gray-500">{currentProject.planned_end || '—'}</td>
-                              <td className="px-4 py-2 text-right text-gray-400">
-                                {isManager && (
-                                  <button onClick={() => setMemberOpen(true)} className="text-primary-600 text-sm mr-2">成员</button>
-                                )}
-                                {can('project:update') && (
-                                  <button onClick={(e) => handleOpenEdit(currentProject, e)} className="text-primary-600 text-sm">编辑</button>
-                                )}
-                              </td>
-                            </tr>
-                            {tasks.flatMap((t) => renderRow(t, 0))}
-                            {tasks.length === 0 && (
-                              <tr><td colSpan={8} className="px-4 py-8 text-center text-gray-400">暂无任务</td></tr>
-                            )}
-                          </>
-                        )}
-                      </tbody>
-                    </table>
+                    <div className="flex">
+                      <SharedLeftPanel
+                        tasks={visibleLeftTasks}
+                        expanded={expanded}
+                        childMap={childMap}
+                        onToggle={toggle}
+                        onRowClick={(id) => { const t = findTaskById(tasks, id); if (t) openEdit(t); }}
+                        project={currentProject ? { code: currentProject.code, name: currentProject.name, status: currentProject.status, owner_name: currentProject.owner_name } : null}
+                        hoveredId={hoveredId}
+                        onHover={setHoveredId}
+                      />
+                      {viewMode === 'table' ? (
+                        <div className="overflow-x-auto flex-1 bg-white">
+                          {currentProject && (
+                            <>
+                              <div className="flex items-center bg-gray-50 border-b border-gray-200 text-sm" style={{ height: 36 }}>
+                                <span className="px-2 shrink-0 truncate text-gray-400" style={{ width: 64 }}>—</span>
+                                <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{currentProject.planned_start || '—'}</span>
+                                <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{currentProject.planned_end || '—'}</span>
+                                <div className="flex-1 flex items-center justify-end px-4 text-gray-400">
+                                  {isManager && (
+                                    <button onClick={() => setMemberOpen(true)} className="text-primary-600 text-sm mr-2">成员</button>
+                                  )}
+                                  {can('project:update') && (
+                                    <button onClick={(e) => handleOpenEdit(currentProject, e)} className="text-primary-600 text-sm">编辑</button>
+                                  )}
+                                </div>
+                              </div>
+                              {(() => {
+                                const rightRows: JSX.Element[] = [];
+                                const walk = (ts: ProjectTask[], depth: number) => {
+                                  for (const t of ts) {
+                                    if (taskStatusFilter && t.status !== taskStatusFilter) { if (t.children) walk(t.children, depth + 1); continue; }
+                                    if (taskSearch && !subtreeHasMatch(t)) continue;
+                                    const isOpen = expanded.has(t.id);
+                                    const overdue = isOverdue(t);
+                                    const isDragAbove = dragOver?.taskId === t.id && dragOver?.position === 'above';
+                                    const isDragBelow = dragOver?.taskId === t.id && dragOver?.position === 'below';
+                                    const isDragInto = dragOver?.taskId === t.id && dragOver?.position === 'into';
+                                    const isDragging = dragTask?.id === t.id;
+                                    if (isDragAbove) rightRows.push(<div key={t.id + '-above'} className="h-1"><div className="h-1 bg-primary-500 rounded-full mx-1" /></div>);
+                                    rightRows.push(
+                                      <div key={t.id} draggable
+                                        onDragStart={(e) => handleDragStart(t, e)} onDragEnd={handleDragEnd}
+                                        onDragOver={(e) => handleDragOver(t, e)} onDragLeave={handleDragLeave}
+                                        onDrop={(e) => handleDrop(t, e)}
+                                        onClick={() => openEdit(t)}
+                                        onMouseEnter={() => setHoveredId(t.id)}
+                                        onMouseLeave={() => setHoveredId(null)}
+                                        className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''} ${overdue ? 'bg-red-50' : ''} cursor-pointer transition-colors ${isDragInto ? 'bg-blue-50 ring-2 ring-primary-300 ring-inset' : ''} ${isDragging ? 'opacity-40' : ''}`}
+                                        style={{ height: 36 }}>
+                                        <span className="px-2 shrink-0 truncate" style={{ width: 64 }}>{t.priority}</span>
+                                        <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_start || '—'}</span>
+                                        <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_end || '—'}</span>
+                                        <div className="flex-1 flex items-center justify-end px-4 text-gray-400" onClick={(e) => e.stopPropagation()}>
+                                          {(t.link_count ?? 0) > 0 && <span className="mr-2">🔗 {t.link_count}</span>}
+                                          {isManager && <button onClick={() => openCreate(t.id)} className="text-primary-600 text-sm mr-2">+子</button>}
+                                          {can('project.task:delete') && <button onClick={() => setDelTask(t)} className="text-red-600 text-sm">删除</button>}
+                                        </div>
+                                      </div>
+                                    );
+                                    if (isDragBelow) rightRows.push(<div key={t.id + '-below'} className="h-1"><div className="h-1 bg-primary-500 rounded-full mx-1" /></div>);
+                                    if (isOpen && t.children) walk(t.children, depth + 1);
+                                  }
+                                };
+                                walk(tasks, 0);
+                                return <>{rightRows.length > 0 ? rightRows : tasks.length === 0 ? <div className="px-4 py-8 text-center text-gray-400">暂无任务</div> : null}</>;
+                              })()}
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <GanttView
+                          hideLeftPanel
+                          onHoverChange={setHoveredId}
+                          projectId={selectedProjectId!}
+                          canEdit={can('project.task:depend')}
+                          refreshKey={ganttKey}
+                          project={currentProject ? { code: currentProject.code, name: currentProject.name, status: currentProject.status, planned_start: currentProject.planned_start, planned_end: currentProject.planned_end, owner_name: currentProject.owner_name } : null}
+                          expanded={expanded}
+                          onExpandedChange={setExpanded}
+                          scale={ganttScale}
+                          onScaleChange={setGanttScale}
+                          autoScheduleKey={autoScheduleKey}
+                          onRowClick={(id) => { const t = findTaskById(tasks, id); if (t) openEdit(t); }}
+                          onTaskUpdated={() => { loadTasks(selectedProjectId!); setGanttKey((k) => k + 1); }}
+                        />
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="flex-1 min-h-0">
-                    <GanttView
-                      projectId={selectedProjectId!}
-                      canEdit={can('project.task:depend')}
-                      refreshKey={ganttKey}
-                      project={currentProject ? { code: currentProject.code, name: currentProject.name, status: currentProject.status, planned_start: currentProject.planned_start, planned_end: currentProject.planned_end, owner_name: currentProject.owner_name } : null}
-                      expanded={expanded}
-                      onExpandedChange={setExpanded}
-                      scale={ganttScale}
-                      onScaleChange={setGanttScale}
-                      autoScheduleKey={autoScheduleKey}
-                      onRowClick={(id) => { const t = findTaskById(tasks, id); if (t) openEdit(t); }}
-                      onTaskUpdated={() => { loadTasks(selectedProjectId!); setGanttKey((k) => k + 1); }}
-                    />
-                  </div>
-                )}
+                </div>
 
                 <MemberManageModal open={memberOpen} projectId={selectedProjectId!} ownerId={currentProject.owner_id}
                   onClose={() => setMemberOpen(false)}

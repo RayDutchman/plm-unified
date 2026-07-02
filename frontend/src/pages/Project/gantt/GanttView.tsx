@@ -3,10 +3,10 @@ import { projectApi } from '../../../services/projectApi';
 import type { GanttData, GanttTask } from '../../../types/project';
 import type { Scale } from './ganttUtils';
 import {
-  DAY_PX, ROW_H, BAR_H, LEFT_W, CODE_W, ASSIGNEE_W, STATUS_W, INDENT, parseDate, daysBetween, addDays, fmtISO,
-  computeRange, barBox, ticks, STATUS_FILL, STATUS_BADGE, depAnchors,
+  DAY_PX, ROW_H, BAR_H, LEFT_W, parseDate, daysBetween, addDays, fmtISO,
+  computeRange, barBox, ticks, STATUS_FILL, depAnchors,
 } from './ganttUtils';
-import { TaskCodeCell, TaskNameCell, TaskAssigneeCell } from '../TaskRowCells';
+import SharedLeftPanel from '../SharedLeftPanel';
 
 interface Props {
   projectId: string;
@@ -20,9 +20,11 @@ interface Props {
   scale?: Scale;
   onScaleChange?: (s: Scale) => void;
   autoScheduleKey?: number;
+  hideLeftPanel?: boolean;
+  onHoverChange?: (taskId: string | null) => void;
 }
 
-export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClick, refreshKey, project, expanded: extExpanded, onExpandedChange, scale: extScale, onScaleChange, autoScheduleKey }: Props) {
+export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClick, refreshKey, project, expanded: extExpanded, onExpandedChange, scale: extScale, onScaleChange, autoScheduleKey, hideLeftPanel, onHoverChange }: Props) {
   const [data, setData] = useState<GanttData | null>(null);
   const [intScale, setIntScale] = useState<Scale>('day');
   const scale = extScale ?? intScale;
@@ -32,12 +34,13 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   const [preview, setPreview] = useState<Record<string, { start: string; end: string }>>({});
   const [createDrag, setCreateDrag] = useState<{ id: string; anchorDay: number; isMilestone: boolean; startX: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const movedRef = useRef(false);   // 区分点击与拖拽
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const movedRef = useRef(false);
   const [viewportW, setViewportW] = useState(0);
   const [pan, setPan] = useState<{ startX: number; startScroll: number; taskId?: string } | null>(null);
   const [scheduling, setScheduling] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const setHovered = (id: string | null) => { setHoveredId(id); onHoverChange?.(id); };
   const [intExpanded, setIntExpanded] = useState<Set<string>>(new Set());
 
   const expanded = extExpanded ?? intExpanded;
@@ -255,7 +258,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
 
   // 测量可视宽度,用于把日历铺满界面
   useEffect(() => {
-    const el = scrollRef.current;
+    const el = calendarScrollRef.current;
     if (!el) return;
     const measure = () => setViewportW(el.clientWidth);
     measure();
@@ -266,15 +269,15 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
 
   // 拖动时间轴空白处左右平移(调整关注区域)
   const onPanDown = (e: React.MouseEvent, taskId?: string) => {
-    if (!scrollRef.current) return;
+    if (!calendarScrollRef.current) return;
     movedRef.current = false;
-    setPan({ startX: e.clientX, startScroll: scrollRef.current.scrollLeft, taskId });
+    setPan({ startX: e.clientX, startScroll: calendarScrollRef.current.scrollLeft, taskId });
   };
   useEffect(() => {
     if (!pan) return;
     const onMove = (e: MouseEvent) => {
       if (Math.abs(e.clientX - pan.startX) > 4) movedRef.current = true;
-      if (scrollRef.current) scrollRef.current.scrollLeft = pan.startScroll - (e.clientX - pan.startX);
+      if (calendarScrollRef.current) calendarScrollRef.current.scrollLeft = pan.startScroll - (e.clientX - pan.startX);
     };
     const onUp = () => {
       if (!movedRef.current && pan.taskId) onRowClick?.(pan.taskId);
@@ -291,7 +294,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   if (data.tasks.length === 0) return <div className="p-8 text-center text-gray-400">该项目还没有任务,先在"项目详情"中添加任务。</div>;
 
   // 日历铺满可视宽度:不足时向后补天数填满
-  const availChartW = Math.max(0, viewportW - LEFT_W);
+  const availChartW = Math.max(0, viewportW);
   const totalDays = Math.max(daysBetween(range.start, range.end) + 1, Math.ceil(availChartW / px));
   const chartW = totalDays * px;
   const chartH = (visibleTasks.length + taskRowOffset) * ROW_H;
@@ -321,156 +324,122 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     );
   });
 
-  return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div ref={scrollRef} className="flex overflow-auto" style={{ maxHeight: '70vh' }}>
-        <div className="shrink-0 border-r border-gray-200 sticky left-0 z-20 bg-white" style={{ width: LEFT_W }}>
-          <div className="bg-gray-50 border-b border-gray-200 flex items-center text-sm font-medium text-gray-500" style={{ height: ROW_H }}>
-            <span className="shrink-0 truncate text-left pl-2" style={{ width: CODE_W }}>任务编号</span>
-            <span className="px-1 flex-1 min-w-0 truncate text-left">任务名称</span>
-            <span className="px-1 shrink-0 truncate text-center" style={{ width: ASSIGNEE_W }}>负责人</span>
-            <span className="px-1 shrink-0 truncate text-center" style={{ width: STATUS_W }}>状态</span>
-          </div>
-          {hasProject && (
-            <div className="flex items-center border-b border-gray-200 bg-gray-50 text-sm" style={{ height: ROW_H }}>
-              <span className="shrink-0 truncate font-semibold text-gray-700 pl-2" style={{ width: CODE_W }} title={project!.code}>
-                {project!.code}
-              </span>
-              <span className="px-1 flex-1 min-w-0 flex items-center">
-                <span className="text-gray-400 mr-1 shrink-0">📁</span>
-                <span className="font-medium text-gray-700 truncate" title={project!.name}>{project!.name}</span>
-              </span>
-              <span className="px-1 shrink-0 truncate text-xs text-gray-500 text-center" style={{ width: ASSIGNEE_W }} title={project!.owner_name || ''}>
-                {project!.owner_name || '—'}
-              </span>
-              <span className="px-1 shrink-0 flex items-center justify-center" style={{ width: STATUS_W }}>
-                {project!.status && (
-                  <span className={`px-1.5 py-0.5 text-xs rounded ${STATUS_BADGE[project!.status] || 'bg-gray-100 text-gray-600'}`}>{project!.status}</span>
-                )}
-              </span>
+  const calendarPart = (
+    <div ref={calendarScrollRef} className="overflow-x-auto flex-1" style={{ overflowY: 'hidden' }}>
+      <div className="relative" style={{ width: chartW }}>
+        <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10 flex items-center" style={{ width: chartW, height: ROW_H, cursor: pan ? 'grabbing' : 'grab' }}
+          onMouseDown={onPanDown}>
+          {tickList.map((tk, i) => (
+            <div key={i} className={`absolute top-0 text-[10px] flex items-center ${tk.major ? 'text-gray-600' : 'text-gray-300'}`}
+              style={{ left: tk.x, height: ROW_H, borderLeft: tk.major ? '1px solid #e5e7eb' : 'none', paddingLeft: 2 }}>
+              {tk.label}
             </div>
+          ))}
+        </div>
+        <svg ref={svgRef} width={chartW} height={chartH} className="block">
+          <defs>
+            <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
+            </marker>
+          </defs>
+          {hasProject && (
+            <rect x={0} y={0} width={chartW} height={ROW_H}
+              fill="#f9fafb" style={{ cursor: pan ? 'grabbing' : 'pointer' }} onMouseDown={(e) => onPanDown(e)} />
+          )}
+          {visibleTasks.map((t, i) => (
+            <rect key={`bg-${t.id}`} x={0} y={(i + taskRowOffset) * ROW_H} width={chartW} height={ROW_H}
+              fill={hoveredId === t.id ? '#f0f9ff' : (i % 2 ? '#fafafa' : '#fff')}
+              onMouseEnter={() => setHovered(t.id)}
+              onMouseLeave={() => setHovered(null)}
+              style={{ cursor: pan ? 'grabbing' : 'pointer' }} onMouseDown={(e) => onPanDown(e, t.id)} />
+          ))}
+          {todayX >= 0 && todayX <= chartW && (
+            <line x1={todayX} y1={0} x2={todayX} y2={chartH} stroke="#f97316" strokeWidth={1} strokeDasharray="3,3" />
+          )}
+          {depPaths}
+          {hasProject && projectDates && (
+            (() => {
+              const ps = parseDate(projectDates.start); const pe = parseDate(projectDates.end);
+              if (!ps || !pe) return null;
+              const x = daysBetween(range.start, ps) * px;
+              const w = Math.max(px, (daysBetween(ps, pe) + 1) * px);
+              const y = (ROW_H - BAR_H) / 2;
+              return (
+                <rect x={x} y={y} width={w} height={12} rx={3} fill="#93c5fd" opacity={0.7} />
+              );
+            })()
           )}
           {visibleTasks.map((t) => {
-            const hasChildren = !!childMap[t.id];
+            const ri = visRowIndex[t.id] + taskRowOffset;
+            const box = barBox(effTask(t), range.start, scale, ri);
+            if (!box) return null;
+            const isParent = !!childMap[t.id];
+            if (t.task_type === '里程碑') {
+              const cx = box.x; const cy = box.y + 6;
+              return <rect key={t.id} x={cx - 7} y={cy - 7} width={14} height={14}
+                transform={`rotate(45 ${cx} ${cy})`}
+                fill={t.is_overdue ? '#ef4444' : '#6366f1'} stroke={t.is_critical ? '#dc2626' : 'none'} strokeWidth={2}
+                style={{ cursor: canEdit && !isParent ? 'grab' : 'default' }}
+                onMouseDown={(e) => { if (canEdit && !isParent) onMouseDown(e, t, 'move'); }} />;
+            }
+            const fill = t.is_overdue ? '#ef4444' : STATUS_FILL[t.status] || '#9ca3af';
             return (
-              <div key={t.id}
-                className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''}`}
-                style={{ height: ROW_H }}
-                onMouseEnter={() => setHoveredId(t.id)}
-                onMouseLeave={() => setHoveredId(null)}>
-                <TaskCodeCell code={t.code} depth={t.depth} hasChildren={hasChildren}
-                  isExpanded={expanded.has(t.id)}
-                  onToggle={(e) => { e.stopPropagation(); toggleExpand(t.id); }}
-                  onClick={() => onRowClick?.(t.id)} variant="gantt" />
-                <TaskNameCell name={t.name} taskType={t.task_type}
-                  isCritical={t.is_critical} variant="gantt"
-                  onClick={() => onRowClick?.(t.id)} />
-                <TaskAssigneeCell assigneeName={t.assignee_name} variant="gantt"
-                  onClick={() => onRowClick?.(t.id)} />
-                <span className="px-1 shrink-0 flex items-center justify-center cursor-pointer" style={{ width: STATUS_W }}
-                  onClick={() => onRowClick?.(t.id)}>
-                  <span className={`px-1.5 py-0.5 text-xs rounded whitespace-nowrap ${STATUS_BADGE[t.status] || 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
-                </span>
-              </div>
+              <g key={t.id}>
+                <rect x={box.x} y={box.y} width={box.w} height={12} rx={3}
+                  fill={isParent ? '#cbd5e1' : fill} opacity={isParent ? 0.7 : 1}
+                  stroke={t.is_critical ? '#dc2626' : 'none'} strokeWidth={t.is_critical ? 2 : 0}
+                  style={{ cursor: canEdit && !isParent ? 'grab' : 'default' }}
+                  onMouseDown={(e) => !isParent && onMouseDown(e, t, 'move')} />
+                {canEdit && !isParent && (
+                  <>
+                    <rect x={box.x - 3} y={box.y} width={6} height={12} fill="transparent" style={{ cursor: 'ew-resize' }}
+                      onMouseDown={(e) => onMouseDown(e, t, 'resize-l')} />
+                    <rect x={box.x + box.w - 3} y={box.y} width={6} height={12} fill="transparent" style={{ cursor: 'ew-resize' }}
+                      onMouseDown={(e) => onMouseDown(e, t, 'resize-r')} />
+                  </>
+                )}
+              </g>
             );
           })}
-        </div>
+          {canEdit && visibleTasks.map((t, i) => {
+            const hasDates = !!(t.planned_start && t.planned_end);
+            const isParent = !!childMap[t.id];
+            if (hasDates || isParent || preview[t.id]) return null;
+            const ri = i + taskRowOffset;
+            return (
+              <g key={`new-${t.id}`}>
+                <text x={6} y={ri * ROW_H + ROW_H / 2 + 3} fontSize={10} fill="#cbd5e1" style={{ pointerEvents: 'none' }}>
+                  ⟵ 拖拽设置计划日期 ⟶
+                </text>
+                <rect x={0} y={ri * ROW_H} width={chartW} height={ROW_H} fill="transparent"
+                  style={{ cursor: 'crosshair' }} onMouseDown={(e) => onCreateDown(e, t)} />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
 
-        <div className="relative" style={{ width: chartW }}>
-          <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10 flex items-center" style={{ width: chartW, height: ROW_H, cursor: pan ? 'grabbing' : 'grab' }}
-            onMouseDown={onPanDown}>
-            {tickList.map((tk, i) => (
-              <div key={i} className={`absolute top-0 text-[10px] flex items-center ${tk.major ? 'text-gray-600' : 'text-gray-300'}`}
-                style={{ left: tk.x, height: ROW_H, borderLeft: tk.major ? '1px solid #e5e7eb' : 'none', paddingLeft: 2 }}>
-                {tk.label}
-              </div>
-            ))}
-          </div>
+  if (hideLeftPanel) {
+    return calendarPart;
+  }
 
-          <svg ref={svgRef} width={chartW} height={chartH} className="block">
-            <defs>
-              <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-                <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
-              </marker>
-            </defs>
-            {hasProject && (
-              <rect x={0} y={0} width={chartW} height={ROW_H}
-                fill="#f9fafb" style={{ cursor: pan ? 'grabbing' : 'pointer' }} onMouseDown={(e) => onPanDown(e)} />
-            )}
-            {visibleTasks.map((t, i) => (
-              <rect key={`bg-${t.id}`} x={0} y={(i + taskRowOffset) * ROW_H} width={chartW} height={ROW_H}
-                fill={hoveredId === t.id ? '#f0f9ff' : (i % 2 ? '#fafafa' : '#fff')}
-                onMouseEnter={() => setHoveredId(t.id)}
-                onMouseLeave={() => setHoveredId(null)}
-                style={{ cursor: pan ? 'grabbing' : 'pointer' }} onMouseDown={(e) => onPanDown(e, t.id)} />
-            ))}
-            {todayX >= 0 && todayX <= chartW && (
-              <line x1={todayX} y1={0} x2={todayX} y2={chartH} stroke="#f97316" strokeWidth={1} strokeDasharray="3,3" />
-            )}
-            {depPaths}
-            {/* 项目级行 */}
-            {hasProject && projectDates && (
-              (() => {
-                const ps = parseDate(projectDates.start); const pe = parseDate(projectDates.end);
-                if (!ps || !pe) return null;
-                const x = daysBetween(range.start, ps) * px;
-                const w = Math.max(px, (daysBetween(ps, pe) + 1) * px);
-                const y = (ROW_H - BAR_H) / 2;
-                return (
-                  <rect x={x} y={y} width={w} height={12} rx={3}
-                    fill="#93c5fd" opacity={0.7} />
-                );
-              })()
-            )}
-            {visibleTasks.map((t) => {
-              const ri = visRowIndex[t.id] + taskRowOffset;
-              const box = barBox(effTask(t), range.start, scale, ri);
-              if (!box) return null;
-              const isParent = !!childMap[t.id];
-              if (t.task_type === '里程碑') {
-                const cx = box.x; const cy = box.y + 6;
-                return <rect key={t.id} x={cx - 7} y={cy - 7} width={14} height={14}
-                  transform={`rotate(45 ${cx} ${cy})`}
-                  fill={t.is_overdue ? '#ef4444' : '#6366f1'} stroke={t.is_critical ? '#dc2626' : 'none'} strokeWidth={2}
-                  style={{ cursor: canEdit && !isParent ? 'grab' : 'default' }}
-                  onMouseDown={(e) => { if (canEdit && !isParent) onMouseDown(e, t, 'move'); }} />;
-              }
-              const fill = t.is_overdue ? '#ef4444' : STATUS_FILL[t.status] || '#9ca3af';
-              return (
-                <g key={t.id}>
-                  <rect x={box.x} y={box.y} width={box.w} height={12} rx={3}
-                    fill={isParent ? '#cbd5e1' : fill} opacity={isParent ? 0.7 : 1}
-                    stroke={t.is_critical ? '#dc2626' : 'none'} strokeWidth={t.is_critical ? 2 : 0}
-                    style={{ cursor: canEdit && !isParent ? 'grab' : 'default' }}
-                    onMouseDown={(e) => !isParent && onMouseDown(e, t, 'move')} />
-                  {canEdit && !isParent && (
-                    <>
-                      <rect x={box.x - 3} y={box.y} width={6} height={12} fill="transparent" style={{ cursor: 'ew-resize' }}
-                        onMouseDown={(e) => onMouseDown(e, t, 'resize-l')} />
-                      <rect x={box.x + box.w - 3} y={box.y} width={6} height={12} fill="transparent" style={{ cursor: 'ew-resize' }}
-                        onMouseDown={(e) => onMouseDown(e, t, 'resize-r')} />
-                    </>
-                  )}
-                </g>
-              );
-            })}
-            {/* 无日期任务:整行透明覆盖层,拖拽划出计划起止 */}
-            {canEdit && visibleTasks.map((t, i) => {
-              const hasDates = !!(t.planned_start && t.planned_end);
-              const isParent = !!childMap[t.id];
-              if (hasDates || isParent || preview[t.id]) return null;
-              const ri = i + taskRowOffset;
-              return (
-                <g key={`new-${t.id}`}>
-                  <text x={6} y={ri * ROW_H + ROW_H / 2 + 3} fontSize={10} fill="#cbd5e1" style={{ pointerEvents: 'none' }}>
-                    ⟵ 拖拽设置计划日期 ⟶
-                  </text>
-                  <rect x={0} y={ri * ROW_H} width={chartW} height={ROW_H} fill="transparent"
-                    style={{ cursor: 'crosshair' }} onMouseDown={(e) => onCreateDown(e, t)} />
-                </g>
-              );
-            })}
-          </svg>
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
+        <div className="flex">
+          <SharedLeftPanel
+            tasks={visibleTasks}
+            expanded={expanded}
+            childMap={childMap}
+            onToggle={toggleExpand}
+            onRowClick={(id) => onRowClick?.(id)}
+            project={project}
+            hoveredId={hoveredId}
+            onHover={setHovered}
+          />
+          {calendarPart}
         </div>
       </div>
     </div>
