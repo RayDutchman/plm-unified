@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Modal } from '../Modal';
-import { configurationApi, assemblyPartsApi } from '../../services/api';
-import type { ConfigPartItem, ConfigChildItem } from '../../types';
+import { configurationApi, assemblyPartsApi, customFieldsApi } from '../../services/api';
+import { useDataStore } from '../../stores/data';
+import type { ConfigPartItem, ConfigChildItem, CustomFieldDefinition } from '../../types';
 import EntityDocumentSection from '../EntityDocumentSection';
 import PartMasterDetailModal from '../PartMasterDetailModal';
 
@@ -27,6 +28,13 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
   // 子构型项嵌套详情
   const [nestedConfigId, setNestedConfigId] = useState<string | null>(null);
 
+  // 自定义字段
+  const [customDefs, setCustomDefs] = useState<CustomFieldDefinition[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, any>>({});
+
+  // Tab 切换
+  const [tab, setTab] = useState<'basic' | 'children' | 'parts' | 'docs'>('basic');
+
   // 按构型号排序
   const sortByCode = (items: any[]) =>
     [...items].sort((a, b) => ((a.child_detail?.code || a.child_code || '').localeCompare(b.child_detail?.code || b.child_code || '', 'zh-CN', { numeric: true })));
@@ -34,12 +42,27 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
   useEffect(() => {
     if (!itemId) return;
     setLoading(true);
+    setCustomDefs([]);
+    setCustomValues({});
+    setTab('basic');
     configurationApi.getItem(itemId)
-      .then((res) => {
+      .then(async (res) => {
         const d = res.data;
         if (d.children) d.children = sortByCode(d.children);
         setData(d);
         setExpandedParts({}); setExpandedChild({}); setNoChildren(new Set());
+        // 加载自定义字段定义和值
+        const allDefs = useDataStore.getState().customFieldDefs;
+        const defs = allDefs.filter((df: CustomFieldDefinition) => df.applies_to?.includes('configuration'));
+        setCustomDefs(defs);
+        if (defs.length > 0 && d.id) {
+          try {
+            const cfRes = await customFieldsApi.getValues('configuration', d.id);
+            const vals: Record<string, any> = {};
+            (cfRes.data || []).forEach((v: any) => { vals[v.field_id] = v.value; });
+            setCustomValues(vals);
+          } catch { setCustomValues({}); }
+        }
       })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
@@ -160,7 +183,7 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
           <td className={`px-3 py-2 text-sm ${rowCls}`} onClick={onClickRow}>{name}</td>
           <td className={`px-3 py-2 text-sm whitespace-nowrap ${rowCls}`} onClick={onClickRow}>
             <span className={`px-1.5 py-0.5 rounded text-xs ${isAssembly ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-              {isAssembly ? '部件' : '零件'}
+              {isAssembly ? '部件' : '零部件'}
             </span>
           </td>
           <td className={`px-3 py-2 text-sm text-gray-500 ${rowCls}`} onClick={onClickRow}>{version}</td>
@@ -227,68 +250,121 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
 
   if (!itemId) return null;
 
+  const hasParts = (data?.parts?.length || 0) > 0;
+  const hasChildren = (data?.children?.length || 0) > 0;
+
   return (
     <>
-    <Modal open={!!itemId} onClose={onClose} title="构型项详情" width="full">
+    <Modal open={!!itemId} onClose={onClose} title={data ? `构型项详情：${data.code} | ${data.name}` : '构型项详情'} width="full">
       {loading ? (
         <div className="py-8 text-center text-sm text-gray-400">加载中...</div>
       ) : !data ? (
         <div className="py-8 text-center text-sm text-gray-400">加载失败</div>
       ) : (
-        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-1">
-          {/* 基本信息 - 卡片式 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <InfoItem label="构型号" value={data.code} />
-            <InfoItem label="中文名称" value={data.name} />
-            <InfoItem label="创建人" value={data.creator_name || '-'} />
-            <InfoItem label="备注" value={data.remark || '-'} className="col-span-2 md:col-span-4" />
+        <div className="flex flex-col max-h-[70vh]">
+          {/* Tab 栏 */}
+          <div className="flex gap-1 mb-4 border-b shrink-0">
+            <button onClick={() => setTab('basic')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'basic' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              基础信息
+            </button>
+            {hasChildren && (
+              <button onClick={() => setTab('children')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'children' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                子构型项
+              </button>
+            )}
+            {hasParts && (
+              <button onClick={() => setTab('parts')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'parts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                关联零部件
+              </button>
+            )}
+            <button onClick={() => setTab('docs')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'docs' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              关联图文档
+            </button>
           </div>
 
-          {/* 关联零部件 */}
-          <div>
-            <h4 className="text-sm font-bold text-gray-700 mb-2">关联零部件 ({data.parts?.length || 0})</h4>
-            {data.parts?.length > 0 ? (
-              <table className="w-full text-sm border border-gray-200 rounded">
-                <thead className="bg-gray-50 border-b"><tr>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-20">层级</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium">件号</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium">中文名称</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-14">版本</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">状态</th>
-                  <th className="px-3 py-2 text-center text-gray-500 font-medium w-16">用量</th>
-                  <th className="px-3 py-2 text-center text-gray-500 font-medium w-24">必选/可选</th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data.parts as ConfigPartItem[]).map((p, i) => renderPartRow(p, 0, String(i)))}
-                </tbody>
-              </table>
-            ) : <div className="text-sm text-gray-400 py-2">暂无关联零部件</div>}
-          </div>
+          {/* Tab 内容 */}
+          <div className="flex-1 overflow-y-auto pr-1">
+            {tab === 'basic' && (
+              <div className="space-y-6">
+                {/* 基本字段 */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <InfoItem label="构型号" value={data.code} />
+                  <InfoItem label="中文名称" value={data.name} />
+                  <InfoItem label="创建人" value={data.creator_name || '-'} />
+                  <InfoItem label="备注" value={data.remark || '-'} className="col-span-2 md:col-span-4" />
+                </div>
 
-          {/* 子构型项 */}
-          <div>
-            <h4 className="text-sm font-bold text-gray-700 mb-2">子构型项 ({data.children?.length || 0})</h4>
-            {data.children?.length > 0 ? (
-              <table className="w-full text-sm border border-gray-200 rounded">
-                <thead className="bg-gray-50 border-b"><tr>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-20">层级</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium">构型号/零部件件号</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium">名称</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">类型</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-14">版本</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">状态</th>
-                  <th className="px-3 py-2 text-center text-gray-500 font-medium w-16">用量</th>
-                  <th className="px-3 py-2 text-center text-gray-500 font-medium w-24">必选/可选</th>
-                </tr></thead>
-                <tbody className="divide-y divide-gray-100">
-                  {(data.children as ConfigChildItem[]).map((c, i) => renderUnifiedChildRow(c, 1, `c${i}`))}
-                </tbody>
-              </table>
-            ) : <div className="text-sm text-gray-400 py-2">暂无子构型项</div>}
-          </div>
+                {/* 自定义字段 */}
+                {customDefs.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {customDefs.map(def => (
+                        <InfoItem
+                          key={def.id}
+                          label={def.name}
+                          value={
+                            def.field_type === 'select'
+                              ? String((def.options || []).find(o => o === customValues[def.id]) || customValues[def.id] || '-')
+                              : String(customValues[def.id] ?? '-')
+                          }
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* 关联图文档 */}
-          <EntityDocumentSection entityType="configuration" entityId={data.id} entityCode={data.code} entityName={data.name} editable={false} />
+            {tab === 'children' && hasChildren && (
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 mb-2">子构型项 ({data.children.length})</h4>
+                <table className="w-full text-sm border border-gray-200 rounded">
+                  <thead className="bg-gray-50 border-b"><tr>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-20">层级</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">构型号/零部件件号</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">名称</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">类型</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-14">版本</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">状态</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-16">用量</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-24">必选/可选</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(data.children as ConfigChildItem[]).map((c, i) => renderUnifiedChildRow(c, 1, `c${i}`))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {tab === 'parts' && hasParts && (
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 mb-2">关联零部件 ({data.parts.length})</h4>
+                <table className="w-full text-sm border border-gray-200 rounded">
+                  <thead className="bg-gray-50 border-b"><tr>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-20">层级</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">件号</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">中文名称</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-14">版本</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">状态</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-16">用量</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-24">必选/可选</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(data.parts as ConfigPartItem[]).map((p, i) => renderPartRow(p, 0, String(i)))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {tab === 'docs' && (
+              <EntityDocumentSection entityType="configuration" entityId={data.id} entityCode={data.code} entityName={data.name} editable={false} />
+            )}
+          </div>
         </div>
       )}
     </Modal>

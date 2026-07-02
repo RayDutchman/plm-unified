@@ -458,7 +458,7 @@ export default function EntityDocumentSection({ entityType, entityId, editable, 
       />
 
       {/* 图文档编辑弹窗 */}
-      <Modal open={!!editingDoc} title="编辑图文档" onClose={() => setEditingDoc(null)} width="full" zIndex={60}>
+      <Modal open={!!editingDoc} title={editingDoc ? `编辑图文档：${editingDoc.code} | ${editingDoc.name}` : '编辑图文档'} onClose={() => setEditingDoc(null)} width="full" zIndex={60}>
         {editingDoc && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -584,7 +584,7 @@ export default function EntityDocumentSection({ entityType, entityId, editable, 
 
       {/* 图文档详情弹窗 */}
       {viewingDocDetail && (
-        <Modal open={!!viewingDocDetail} title="图文档详情" onClose={() => setViewingDocDetail(null)} width="full" zIndex={61}>
+        <Modal open={!!viewingDocDetail} title={`图文档详情：${viewingDocDetail.code} | ${viewingDocDetail.name}`} onClose={() => setViewingDocDetail(null)} width="full" zIndex={61}>
           <DocumentDetailContent
             doc={viewingDocDetail}
             customFieldDefs={viewingDocCustomDefs}

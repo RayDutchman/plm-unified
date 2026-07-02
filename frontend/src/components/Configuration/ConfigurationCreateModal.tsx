@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { Modal } from '../Modal';
-import { configurationApi, partsApi, assembliesApi } from '../../services/api';
+import { configurationApi, partsApi, assembliesApi, customFieldsApi } from '../../services/api';
+import { partMasterApi } from '../../services/partMasterApi';
+import { useDataStore } from '../../stores/data';
 import AssemblyPartPicker from '../AssemblyPartPicker';
 import VersionSelectModal from '../VersionSelectModal';
 import EntityDocumentSection from '../EntityDocumentSection';
-import EntityEditModal from '../EntityEditModal';
-import type { ConfigurationItem } from '../../types';
+import PartMasterEditModal from '../PartMasterEditModal';
+import type { ConfigurationItem, CustomFieldDefinition } from '../../types';
 
 interface Props {
   open: boolean;
@@ -83,6 +85,14 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
   // 关联零部件行点击 → 编辑零件/部件
   const [editingPartEntity, setEditingPartEntity] = useState<{ type: 'part' | 'assembly'; id: string } | null>(null);
 
+  // 自定义字段
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDefinition[]>([]);
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, any>>({});
+  const [loadingCustomFields, setLoadingCustomFields] = useState(false);
+
+  // Tab 切换
+  const [tab, setTab] = useState<'basic' | 'children' | 'parts' | 'docs'>('basic');
+
   // 按构型号排序（定义在 useEffect 之前）
   const sortByCode = (items: any[]) =>
     [...items].sort((a, b) => (a.child_code || '').localeCompare(b.child_code || '', 'zh-CN', { numeric: true }));
@@ -101,6 +111,24 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
       setCreatorName((item as any)?.creator_name || '');
       setError('');
       setExpandedChild({}); setNoChildren(new Set()); setLoadingChild(null);
+      setTab('basic');
+      // 加载自定义字段定义（适用于构型项）
+      const allDefs = useDataStore.getState().customFieldDefs;
+      const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes('configuration'));
+      setCustomFieldDefs(defs);
+      setCustomFieldValues({});
+      // 编辑模式:加载已有自定义字段值
+      if (item?.id && defs.length > 0) {
+        setLoadingCustomFields(true);
+        customFieldsApi.getValues('configuration', item.id)
+          .then((res) => {
+            const vals: Record<string, any> = {};
+            (res.data || []).forEach((v: any) => { vals[v.field_id] = v.value; });
+            setCustomFieldValues(vals);
+          })
+          .catch(() => setCustomFieldValues({}))
+          .finally(() => setLoadingCustomFields(false));
+      }
       // Load existing parts and children for edit mode
       if (item?.id) {
         configurationApi.getItem(item.id).then(r => {
@@ -129,6 +157,32 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
       }
     }
   }, [open, item]);
+
+  const renderCustomFieldInput = (def: CustomFieldDefinition) => {
+    const value = customFieldValues[def.id] ?? '';
+    const handleChange = (v: any) => {
+      setCustomFieldValues({ ...customFieldValues, [def.id]: v });
+    };
+    if (def.field_type === 'select' && def.options?.length) {
+      return (
+        <select value={value} onChange={(e) => handleChange(e.target.value)}
+          className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500">
+          <option value="">请选择</option>
+          {def.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+        </select>
+      );
+    }
+    if (def.field_type === 'number') {
+      return (
+        <input type="number" value={value} onChange={(e) => handleChange(e.target.value ? Number(e.target.value) : null)}
+          className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500" />
+      );
+    }
+    return (
+      <input type="text" value={value} onChange={(e) => handleChange(e.target.value)}
+        className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500" />
+    );
+  };
 
   const handleSubmit = async () => {
     if (!form.code.trim() || !form.name.trim()) { setError('构型号和中文名称不能为空'); return; }
@@ -166,6 +220,16 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
         await configurationApi.addChildren(configId, children.map(c => ({
           child_id: c.child_id, is_required: c.is_required, quantity: c.quantity,
         })));
+      }
+      // 保存自定义字段值
+      if (customFieldDefs.length > 0) {
+        const fieldValues = customFieldDefs.map(def => ({
+          field_id: def.id,
+          value: customFieldValues[def.id] ?? null,
+        })).filter(fv => fv.value !== null && fv.value !== '');
+        if (fieldValues.length > 0) {
+          await customFieldsApi.setValues('configuration', configId, fieldValues);
+        }
       }
       onSaved();
     } catch (e: any) {
@@ -384,11 +448,37 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
 
   return (
     <>
-    <Modal open={open} onClose={onClose} title={isEdit ? '编辑构型项' : '新建构型项'} width="3xl">
+    <Modal open={open} onClose={onClose} title={form.code ? `${isEdit ? '编辑构型项' : '新建构型项'}：${form.code} | ${form.name}` : (isEdit ? '编辑构型项' : '新建构型项')} width="3xl">
       <div className="flex flex-col max-h-[75vh]">
-        <div className="flex-1 overflow-y-auto pr-1 space-y-4">
-        {error && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded">{error}</div>}
+        {error && <div className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded mb-3">{error}</div>}
 
+        {/* Tab 栏 */}
+        <div className="flex gap-1 mb-4 border-b shrink-0">
+          <button onClick={() => setTab('basic')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'basic' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            基础信息
+          </button>
+          <button onClick={() => setTab('children')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'children' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            子构型项
+          </button>
+          <button onClick={() => setTab('parts')}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'parts' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            关联零部件
+          </button>
+          {isEdit && item && (
+            <button onClick={() => setTab('docs')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === 'docs' ? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              关联图文档
+            </button>
+          )}
+        </div>
+
+        {/* Tab 内容 */}
+        <div className="flex-1 overflow-y-auto pr-1">
+
+        {tab === 'basic' && (
+        <>
         {/* 基本信息 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
@@ -420,77 +510,32 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
           </div>
         </div>
 
-        {/* 关联零部件 */}
-        <div className="border-t pt-4">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-bold text-gray-700">关联零部件 ({parts.length})</h4>
-            <button type="button" onClick={() => setPickerOpen(true)}
-              className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700">关联零部件</button>
+        {/* 自定义字段 */}
+        {customFieldDefs.length > 0 && (
+          <div className="border-t pt-4 mt-4">
+            <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
+            {loadingCustomFields ? (
+              <div className="text-sm text-gray-500">加载中...</div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {customFieldDefs.map(def => (
+                  <div key={def.id} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+                    <label className="block text-xs text-gray-500 mb-0.5">
+                      {def.name}
+                      {def.is_required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    {renderCustomFieldInput(def)}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          {parts.length === 0 ? (
-            <p className="text-xs text-gray-400">暂无关联零部件，点击"关联零部件"添加</p>
-          ) : (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-3 py-1.5 text-left text-xs text-gray-500 w-16">类型</th>
-                    <th className="px-3 py-1.5 text-left text-xs text-gray-500">件号</th>
-                    <th className="px-3 py-1.5 text-left text-xs text-gray-500">名称</th>
-                    <th className="px-3 py-1.5 text-left text-xs text-gray-500">规格型号</th>
-                    <th className="px-3 py-1.5 text-left text-xs text-gray-500 w-14">版本</th>
-                    <th className="px-3 py-1.5 text-left text-xs text-gray-500 w-16">状态</th>
-                    <th className="px-3 py-1.5 text-center text-xs text-gray-500 w-16">用量</th>
-                    <th className="px-3 py-1.5 text-center text-xs text-gray-500 w-20">必选/可选</th>
-                    <th className="px-3 py-1.5 text-center text-xs text-gray-500 w-24">操作</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                   {parts.map((p, i) => (
-                     <tr key={i} className="hover:bg-gray-50 cursor-pointer" onClick={() => setEditingPartEntity({ type: p.part_type as 'part' | 'assembly', id: p.part_id })}>
-                       <td className="px-3 py-1.5 text-xs">
-                         <span className={`px-1.5 py-0.5 rounded text-xs ${p.part_type === 'assembly' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-                           {p.part_type === 'assembly' ? '部件' : '零件'}
-                         </span>
-                       </td>
-                       <td className="px-3 py-1.5 text-xs font-mono">{p.part_code}</td>
-                       <td className="px-3 py-1.5 text-xs">{p.part_name}</td>
-                       <td className="px-3 py-1.5 text-xs text-gray-500">{p.part_spec || '-'}</td>
-                       <td className="px-3 py-1.5 text-xs">{p.part_version || '-'}</td>
-                       <td className="px-3 py-1.5 text-xs">
-                         <span className={`px-1.5 py-0.5 rounded text-xs ${p.part_status === 'draft' ? 'bg-blue-100 text-blue-800' : p.part_status === 'frozen' ? 'bg-orange-100 text-orange-800' : p.part_status === 'released' ? 'bg-green-100 text-green-800' : p.part_status === 'obsolete' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
-                           {p.part_status === 'draft' ? '草稿' : p.part_status === 'frozen' ? '冻结' : p.part_status === 'released' ? '发布' : p.part_status === 'obsolete' ? '作废' : '-'}
-                         </span>
-                       </td>
-                       <td className="px-3 py-1.5 text-center" onClick={e => e.stopPropagation()}>
-                         <input type="number" min={1} value={p.quantity ?? 1}
-                           onChange={(e) => updatePartQuantity(i, parseInt(e.target.value) || 1)}
-                           className="w-14 text-center text-xs border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                       </td>
-                       <td className="px-3 py-1.5 text-center" onClick={e => e.stopPropagation()}>
-                         <button onClick={() => togglePartRequired(i)}
-                           className={`px-2 py-0.5 text-xs rounded ${p.is_required ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-                           {p.is_required ? '必选' : '可选'}
-                         </button>
-                       </td>
-                       <td className="px-3 py-1.5 text-center" onClick={e => e.stopPropagation()}>
-                         <div className="flex gap-1 justify-center">
-                           <button onClick={() => setVersionSelectIdx(i)}
-                             className="text-xs text-blue-600 hover:text-blue-800">选择</button>
-                           <button onClick={() => setParts(prev => prev.filter((_, j) => j !== i))}
-                             className="text-xs text-red-500 hover:text-red-700">移除</button>
-                         </div>
-                       </td>
-                     </tr>
-                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        )}
+        </>
+        )}
 
-        {/* 子构型项 */}
-        <div className="border-t pt-4">
+        {tab === 'children' && (
+        <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-bold text-gray-700">子构型项 ({children.length})</h4>
             <button type="button" onClick={() => {
@@ -668,9 +713,75 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
             </div>
           )}
         </div>
+        )}
 
-        {/* 关联图文档（仅编辑模式） */}
-        {isEdit && item && (
+        {tab === 'parts' && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-bold text-gray-700">关联零部件 ({parts.length})</h4>
+            <button type="button" onClick={() => setPickerOpen(true)}
+              className="px-3 py-1 text-sm bg-primary-600 text-white rounded hover:bg-primary-700">关联零部件</button>
+          </div>
+          {parts.length === 0 ? (
+            <p className="px-4 py-6 text-center text-sm text-gray-400">暂无关联零部件，点击"关联零部件"添加</p>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">件号</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">名称</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">规格型号</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-14">版本</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">状态</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-16">用量</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-24">必选/可选</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium w-24">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                   {parts.map((p, i) => (
+                     <tr key={i} className="hover:bg-gray-50 cursor-pointer" onClick={() => setEditingPartEntity({ type: p.part_type as 'part' | 'assembly', id: p.part_id })}>
+                        <td className="px-3 py-2 font-medium">{p.part_code}</td>
+                        <td className="px-3 py-2">{p.part_name}</td>
+                        <td className="px-3 py-2 text-gray-500">{p.part_spec || '-'}</td>
+                        <td className="px-3 py-2">{p.part_version || '-'}</td>
+                        <td className="px-3 py-2">
+                          <span className={`px-1.5 py-0.5 text-xs rounded-full ${p.part_status === 'draft' ? 'bg-blue-100 text-blue-800' : p.part_status === 'frozen' ? 'bg-orange-100 text-orange-800' : p.part_status === 'released' ? 'bg-green-100 text-green-800' : p.part_status === 'obsolete' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {p.part_status === 'draft' ? '草稿' : p.part_status === 'frozen' ? '冻结' : p.part_status === 'released' ? '发布' : p.part_status === 'obsolete' ? '作废' : '-'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                          <input type="number" min={1} value={p.quantity ?? 1}
+                            onChange={(e) => updatePartQuantity(i, parseInt(e.target.value) || 1)}
+                            className="w-14 text-center text-xs border border-gray-200 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                        </td>
+                        <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                          <button onClick={() => togglePartRequired(i)}
+                            className={`px-2 py-0.5 text-xs rounded ${p.is_required ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
+                            {p.is_required ? '必选' : '可选'}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                          <div className="flex gap-1 justify-center">
+                            <button onClick={() => setVersionSelectIdx(i)}
+                              className="text-primary-600 hover:text-primary-800 text-xs">选择</button>
+                            <button onClick={() => setParts(prev => prev.filter((_, j) => j !== i))}
+                              className="text-red-500 hover:text-red-700 text-xs">移除</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                 </tbody>
+               </table>
+               </div>
+             </div>
+          )}
+        </div>
+        )}
+
+        {tab === 'docs' && isEdit && item && (
           <EntityDocumentSection entityType="configuration" entityId={item.id} entityCode={item.code} entityName={item.name} editable />
         )}
 
@@ -772,26 +883,23 @@ export default function ConfigurationCreateModal({ open, item, onClose, onSaved 
         }}
       />
     )}
-    {/* 关联零部件行点击 → 编辑零件/部件 */}
+    {/* 关联零部件行点击 → 编辑零部件 */}
     {editingPartEntity && (
-      <EntityEditModal
-        open={!!editingPartEntity}
-        entityType={editingPartEntity.type}
-        entityId={editingPartEntity.id}
+      <PartMasterEditModal
+        partId={editingPartEntity.id}
         onClose={() => setEditingPartEntity(null)}
         onSaved={() => {
           const target = editingPartEntity;
           setEditingPartEntity(null);
-          // 刷新对应的零部件信息
-          const api = target.type === 'assembly' ? assembliesApi : partsApi;
-          api.get(target.id).then(r => {
-            setParts(prev => prev.map(p => p.part_type === target.type && p.part_id === target.id ? {
+          partMasterApi.get(target.id).then(r => {
+            const d = r.data;
+            setParts(prev => prev.map(p => p.part_id === target.id ? {
               ...p,
-              part_code: r.data.code,
-              part_name: r.data.name,
-              part_version: r.data.version || '',
-              part_spec: r.data.spec || '',
-              part_status: r.data.status || '',
+              part_code: d.number || d.code || p.part_code,
+              part_name: d.name || p.part_name,
+              part_version: d.latestVersion || d.version || p.part_version,
+              part_spec: (d as any).spec || p.part_spec,
+              part_status: d.latestStatus || d.status || p.part_status,
             } : p));
           }).catch(() => {});
         }}

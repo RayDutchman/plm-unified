@@ -785,7 +785,7 @@ export default function Documents() {
 
       <Modal
         open={modalOpen}
-        title={editingDoc ? '编辑图文档' : '新增图文档'}
+        title={formData.code ? `${editingDoc ? '编辑图文档' : '新增图文档'}：${formData.code} | ${formData.name}` : (editingDoc ? '编辑图文档' : '新增图文档')}
         onClose={() => setModalOpen(false)}
         width="full"
       >
@@ -1056,7 +1056,7 @@ export default function Documents() {
       {/* 图文档详情弹窗 */}
       <Modal
         open={!!viewingDoc}
-        title="图文档详情"
+        title={viewingDoc ? `图文档详情：${viewingDoc.code} | ${viewingDoc.name}` : '图文档详情'}
         onClose={() => setViewingDoc(null)}
         width="full"
       >

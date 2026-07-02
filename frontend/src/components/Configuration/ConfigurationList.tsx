@@ -30,7 +30,7 @@ export default function ConfigurationList() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const storeCustomDefs = useDataStore((s) => s.customFieldDefs);
-  const configCustomDefs = storeCustomDefs.filter((d) => d.applies_to?.includes('configuration_item'));
+  const configCustomDefs = storeCustomDefs.filter((d) => d.applies_to?.includes('configuration'));
 
   // 导入导出
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
