@@ -1,5 +1,4 @@
 """用户读取与认证。"""
-import uuid
 from sqlalchemy.orm import Session
 
 from app.models import User
@@ -22,11 +21,12 @@ def get_user(db: Session, user_id) -> User | None:
     )
 
 
-def get_users(db: Session, skip: int = 0, limit: int = 100, workspace_id: uuid.UUID | None = None) -> list[User]:
-    q = db.query(User).filter(User.deleted_at.is_(None))
-    if workspace_id:
-        q = q.filter(User.workspace_id == workspace_id)
-    return q.offset(skip).limit(limit).all()
+def get_users(db: Session, skip: int = 0, limit: int = 100) -> list[User]:
+    return (
+        db.query(User)
+        .filter(User.deleted_at.is_(None))
+        .offset(skip).limit(limit).all()
+    )
 
 
 def authenticate_user(db: Session, username: str, password: str) -> User | None:
