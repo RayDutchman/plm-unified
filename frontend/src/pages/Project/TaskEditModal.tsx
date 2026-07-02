@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { projectApi } from '../../services/projectApi';
-import { partsApi, assembliesApi, documentsApi, ecrApi, ecoApi } from '../../services/api';
+import { partsApi, assembliesApi, documentsApi, ecrApi, ecoApi, customFieldsApi } from '../../services/api';
+import { useDataStore } from '../../stores/data';
 import AssemblyPartPicker from '../../components/AssemblyPartPicker';
 import DocumentPicker from '../../components/DocumentPicker';
 import ConfigItemPicker from '../../components/Configuration/ConfigItemPicker';
 import ECPicker from '../../components/ECPicker';
+import PartMasterDetailModal from '../../components/PartMasterDetailModal';
 import PartDetailContent from '../../components/PartDetailContent';
 import AssemblyDetailContent from '../../components/AssemblyDetailContent';
 import DocumentDetailContent from '../../components/DocumentDetailContent';
@@ -38,7 +40,7 @@ const STATUS_CLASS: Record<string, string> = {
   挂起: 'bg-amber-50 text-amber-700',
 };
 const LINK_LABEL: Record<string, string> = {
-  part: '零件', assembly: '部件', component: '零部件', config_item: '构型项', ec: 'EC', document: '图文档',
+  part: '零部件', assembly: '部件', component: '零部件', config_item: '构型项', ec: 'EC', document: '图文档',
 };
 const LINK_COLOR: Record<string, string> = {
   part: 'bg-primary-50 text-primary-700',
@@ -72,6 +74,8 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
   const [detailEntityType, setDetailEntityType] = useState<string | null>(null);
   const [detailData, setDetailData] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailCustomDefs, setDetailCustomDefs] = useState<any[]>([]);
+  const [detailCustomValues, setDetailCustomValues] = useState<Record<string, any>>({});
   const [archivePreview, setArchivePreview] = useState<{ attId: string; fileName: string } | null>(null);
   const [ecView, setEcView] = useState<{ id: string; kind: 'ecr' | 'eco' } | null>(null);
 
@@ -233,7 +237,9 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
     setDetailEntityId(entityId);
     setDetailEntityType(entityType);
     setDetailData(null);
-    if (entityType === 'config_item') return;
+    setDetailCustomDefs([]);
+    setDetailCustomValues({});
+    if (entityType === 'config_item' || entityType === 'part' || entityType === 'component') return;
     setDetailLoading(true);
     try {
       let res;
@@ -241,6 +247,16 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
       else if (entityType === 'assembly') res = await assembliesApi.get(entityId);
       else if (entityType === 'document') res = await documentsApi.get(entityId);
       if (res) setDetailData(res.data);
+      // 加载自定义字段定义(按实体类型筛选)和值
+      const allDefs = useDataStore.getState().customFieldDefs;
+      const defs = allDefs.filter((d: any) => d.applies_to?.includes(entityType));
+      setDetailCustomDefs(defs);
+      try {
+        const cfRes = await customFieldsApi.getValues(entityType, entityId);
+        const values: Record<string, any> = {};
+        (cfRes.data || []).forEach((v: any) => { values[v.field_id] = v.value; });
+        setDetailCustomValues(values);
+      } catch { setDetailCustomValues({}); }
     } catch {
       setDetailEntityId(null);
       setDetailEntityType(null);
@@ -646,19 +662,25 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
         <ECODetailModal ecoId={ecView.id} onClose={() => setEcView(null)} onRefresh={() => {}} />
       )}
 
-      {detailEntityId && (detailEntityType === 'part' || detailEntityType === 'assembly' || detailEntityType === 'document') && (
+      {detailEntityId && (detailEntityType === 'part' || detailEntityType === 'component') && (
+        <PartMasterDetailModal
+          identifier={detailEntityId}
+          onClose={() => { setDetailEntityId(null); setDetailEntityType(null); }}
+        />
+      )}
+
+      {detailEntityId && (detailEntityType === 'assembly' || detailEntityType === 'document') && (
         <Modal
           open={!!detailEntityId}
-          title={detailEntityType === 'part' ? '零件详情' : detailEntityType === 'assembly' ? '部件详情' : '图文档详情'}
+          title={detailEntityType === 'assembly' ? '部件详情' : '图文档详情'}
           onClose={() => { setDetailEntityId(null); setDetailEntityType(null); setDetailData(null); }}
           width="full"
         >
           {detailLoading ? (
             <div className="flex items-center justify-center py-8 text-gray-400">加载中...</div>
           ) : detailData ? (
-            detailEntityType === 'part' ? <PartDetailContent part={detailData} customFieldDefs={[]} customFieldValues={{}} /> :
-            detailEntityType === 'assembly' ? <AssemblyDetailContent assembly={detailData} customFieldDefs={[]} customFieldValues={{}} /> :
-            <DocumentDetailContent doc={detailData} customFieldDefs={[]} customFieldValues={{}}
+            detailEntityType === 'assembly' ? <AssemblyDetailContent assembly={detailData} customFieldDefs={detailCustomDefs} customFieldValues={detailCustomValues} /> :
+            <DocumentDetailContent doc={detailData} customFieldDefs={detailCustomDefs} customFieldValues={detailCustomValues}
               onArchivePreview={(attId, fileName) => setArchivePreview({ attId, fileName })} />
           ) : null}
         </Modal>
