@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '../../components/Modal';
 import { projectApi } from '../../services/projectApi';
-import { partsApi, assembliesApi, documentsApi, ecrApi, ecoApi, logsApi } from '../../services/api';
+import { partsApi, assembliesApi, documentsApi, ecrApi, ecoApi } from '../../services/api';
 import AssemblyPartPicker from '../../components/AssemblyPartPicker';
 import DocumentPicker from '../../components/DocumentPicker';
 import ConfigItemPicker from '../../components/Configuration/ConfigItemPicker';
@@ -25,6 +25,8 @@ interface Props {
   parentId: string | null;
   onClose: () => void;
   onSaved: () => void;
+  /** 刷新父级数据但不关闭弹窗(状态动作按钮用) */
+  onRefresh?: () => void;
 }
 
 const TYPES: TaskType[] = ['任务', '里程碑', '评审'];
@@ -50,7 +52,7 @@ const LINK_COLOR: Record<string, string> = {
 // 弹窗采用 TAB 结构:基本信息(字段+依赖+评论+状态动作) / 关联对象(链接表) / 操作记录(project_task 日志)
 type Tab = 'info' | 'links' | 'logs';
 
-export default function TaskEditModal({ open, projectId, task, parentId, onClose, onSaved }: Props) {
+export default function TaskEditModal({ open, projectId, task, parentId, onClose, onSaved, onRefresh }: Props) {
   const empty = { name: '', task_type: '任务' as TaskType, assignee_id: '', status: '未开始' as TaskStatus,
     priority: '中' as TaskPriority, planned_start: '', planned_end: '', actual_start: '', actual_end: '', description: '' };
   const [form, setForm] = useState(empty);
@@ -175,7 +177,8 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
         actual_start: payload.actual_start ?? form.actual_start,
         actual_end: payload.actual_end !== undefined ? (payload.actual_end ?? '') : form.actual_end,
       });
-      onSaved();
+      // 状态动作只刷新父级数据,不关闭弹窗(仅右下角取消/保存关闭)
+      onRefresh?.();
     } catch (err: any) {
       alert(err?.response?.data?.detail || '操作失败');
     } finally {
@@ -250,8 +253,8 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
     if (!task) return;
     setTaskLogsLoading(true);
     try {
-      const r = await logsApi.list({ target_type: 'project_task', target_id: task.id, limit: 100 });
-      setTaskLogs((r.data as any).items || r.data || []);
+      const r = await projectApi.listTaskLogs(projectId, task.id);
+      setTaskLogs((r.data as any).items ?? []);
     } catch { setTaskLogs([]); }
     setTaskLogsLoading(false);
   };
@@ -538,33 +541,53 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
           ) : taskLogs.length === 0 ? (
             <div className="text-center text-gray-400 py-8">暂无操作记录</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b sticky top-0 z-10">
-                <tr>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">时间</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">用户</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-gray-500 whitespace-nowrap">操作</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">详情</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {taskLogs.map((l) => (
-                  <tr key={l.id}>
-                    <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{formatDateTime(l.created_at)}</td>
-                    <td className="px-3 py-2">{l.username}</td>
-                    <td className="px-3 py-2">
-                      <span className={`px-2 py-0.5 text-xs rounded-full ${
-                        l.action === '创建任务' ? 'bg-green-100 text-green-800' :
-                        l.action === '删除任务' ? 'bg-red-100 text-red-800' :
-                        l.action === '任务状态变更' ? 'bg-blue-100 text-blue-800' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>{l.action}</span>
-                    </td>
-                    <td className="px-3 py-2 text-gray-500">{l.detail || '-'}</td>
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              {/* 表头固定,不随列表滚动 */}
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  <col style={{ width: '150px' }} />
+                  <col style={{ width: '80px' }} />
+                  <col style={{ width: '96px' }} />
+                  <col />
+                </colgroup>
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">时间</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">用户</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">操作</th>
+                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">详情</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+              </table>
+              {/* 列表放在独立滚动容器,避免撑高弹窗;表头不在滚动区 */}
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col style={{ width: '150px' }} />
+                    <col style={{ width: '80px' }} />
+                    <col style={{ width: '96px' }} />
+                    <col />
+                  </colgroup>
+                  <tbody className="divide-y divide-gray-100">
+                    {taskLogs.map((l) => (
+                      <tr key={l.id}>
+                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap align-top">{formatDateTime(l.created_at)}</td>
+                        <td className="px-3 py-2 align-top truncate">{l.username}</td>
+                        <td className="px-3 py-2 align-top">
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${
+                            l.action === '创建任务' ? 'bg-green-100 text-green-800' :
+                            l.action === '删除任务' ? 'bg-red-100 text-red-800' :
+                            l.action === '任务状态变更' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>{l.action}</span>
+                        </td>
+                        <td className="px-3 py-2 text-gray-500 break-words align-top">{l.detail || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </div>
       )}

@@ -3,8 +3,8 @@ import { projectApi } from '../../../services/projectApi';
 import type { GanttData, GanttTask } from '../../../types/project';
 import type { Scale } from './ganttUtils';
 import {
-  DAY_PX, ROW_H, BAR_H, LEFT_W, CODE_W, ASSIGNEE_W, INDENT, parseDate, daysBetween, addDays, fmtISO,
-  computeRange, barBox, ticks, STATUS_FILL, depAnchors,
+  DAY_PX, ROW_H, BAR_H, LEFT_W, CODE_W, ASSIGNEE_W, STATUS_W, INDENT, parseDate, daysBetween, addDays, fmtISO,
+  computeRange, barBox, ticks, STATUS_FILL, STATUS_BADGE, depAnchors,
 } from './ganttUtils';
 import { TaskCodeCell, TaskNameCell, TaskAssigneeCell } from '../TaskRowCells';
 
@@ -14,7 +14,7 @@ interface Props {
   onTaskUpdated?: () => void;
   onRowClick?: (taskId: string) => void;
   refreshKey?: number;
-  project?: { code: string; name: string; planned_start?: string | null; planned_end?: string | null; owner_name?: string | null } | null;
+  project?: { code: string; name: string; status?: string | null; planned_start?: string | null; planned_end?: string | null; owner_name?: string | null } | null;
   expanded?: Set<string>;
   onExpandedChange?: (s: Set<string>) => void;
   scale?: Scale;
@@ -58,7 +58,8 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
       if (t.planned_start && (!earliest || t.planned_start < earliest)) earliest = t.planned_start;
       if (t.planned_end && (!latest || t.planned_end > latest)) latest = t.planned_end;
     }
-    if (earliest && latest) {
+    // 仅当区间与项目现有计划日期不一致时才写回,避免每次甘特加载都发无变更的空操作(会产生空详情操作记录)
+    if (earliest && latest && (earliest !== project.planned_start || latest !== project.planned_end)) {
       try { await projectApi.updateProject(projectId, { planned_start: earliest, planned_end: latest }); } catch { /* 静默 */ }
     }
   };
@@ -328,6 +329,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
             <span className="shrink-0 truncate text-left pl-2" style={{ width: CODE_W }}>任务编号</span>
             <span className="px-1 flex-1 min-w-0 truncate text-left">任务名称</span>
             <span className="px-1 shrink-0 truncate text-center" style={{ width: ASSIGNEE_W }}>负责人</span>
+            <span className="px-1 shrink-0 truncate text-center" style={{ width: STATUS_W }}>状态</span>
           </div>
           {hasProject && (
             <div className="flex items-center border-b border-gray-200 bg-gray-50 text-sm" style={{ height: ROW_H }}>
@@ -340,6 +342,11 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
               </span>
               <span className="px-1 shrink-0 truncate text-xs text-gray-500 text-center" style={{ width: ASSIGNEE_W }} title={project!.owner_name || ''}>
                 {project!.owner_name || '—'}
+              </span>
+              <span className="px-1 shrink-0 flex items-center justify-center" style={{ width: STATUS_W }}>
+                {project!.status && (
+                  <span className={`px-1.5 py-0.5 text-xs rounded ${STATUS_BADGE[project!.status] || 'bg-gray-100 text-gray-600'}`}>{project!.status}</span>
+                )}
               </span>
             </div>
           )}
@@ -360,6 +367,10 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
                   onClick={() => onRowClick?.(t.id)} />
                 <TaskAssigneeCell assigneeName={t.assignee_name} variant="gantt"
                   onClick={() => onRowClick?.(t.id)} />
+                <span className="px-1 shrink-0 flex items-center justify-center cursor-pointer" style={{ width: STATUS_W }}
+                  onClick={() => onRowClick?.(t.id)}>
+                  <span className={`px-1.5 py-0.5 text-xs rounded whitespace-nowrap ${STATUS_BADGE[t.status] || 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
+                </span>
               </div>
             );
           })}

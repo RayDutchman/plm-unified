@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from app import crud_project
-from app.crud import create_log, get_user
+from app.crud import create_log, get_user, get_logs
 from app.schemas_project import (
     ProjectCreate, ProjectEdit, MemberAdd, MemberRoleUpdate,
     TaskCreate, TaskEdit, TaskStatusUpdate, TaskMove, TaskReorder, TaskLinkAdd, CommentAdd, DepCreate,
@@ -104,7 +104,9 @@ async def update_project(project_id: uuid.UUID, data: ProjectEdit, db: Session =
             label = PROJECT_FIELD_LABELS.get(k, k)
             parts.append(f"{label}：{old_val or '-'}->{new_val or '-'}")
     detail = '; '.join(parts) if parts else None
-    create_log(db, current_user.id, current_user.username, "更新项目", "project", str(project_id), detail, ip)
+    # 无实际字段变更(如甘特图同步项目日期时的空操作)不记日志,避免空详情记录
+    if detail:
+        create_log(db, current_user.id, current_user.username, "更新项目", "project", str(project_id), detail, ip)
     return result
 
 
@@ -225,7 +227,9 @@ async def update_task(project_id: uuid.UUID, task_id: uuid.UUID, data: TaskEdit,
             label = TASK_FIELD_LABELS.get(k, k)
             parts.append(f"{label}：{old_val or '-'}->{new_val or '-'}")
     detail = '; '.join(parts) if parts else None
-    create_log(db, current_user.id, current_user.username, "更新任务", "project_task", str(task_id), detail, ip)
+    # 无实际字段变更不记日志,避免空详情记录
+    if detail:
+        create_log(db, current_user.id, current_user.username, "更新任务", "project_task", str(task_id), detail, ip)
     return result
 
 
@@ -245,6 +249,17 @@ async def update_task_status(project_id: uuid.UUID, task_id: uuid.UUID, data: Ta
     ip = request.client.host if request and request.client else None
     create_log(db, current_user.id, current_user.username, "任务状态变更", "project_task", str(task_id), f"状态→{data.status}", ip)
     return result
+
+
+@router.get("/{project_id}/tasks/{task_id}/logs")
+async def list_task_logs(project_id: uuid.UUID, task_id: uuid.UUID, db: Session = Depends(get_db),
+                         current_user: User = Depends(require_permission("project:read"))):
+    # 任务操作记录:走项目成员门禁,项目成员即可查看(通用 /logs 是 admin-only,非管理员看不到)
+    crud_project.get_project(db, project_id)
+    _require_member(db, project_id, current_user)
+    crud_project.get_active_task(db, task_id, project_id)  # 校验任务属于本项目,防跨项目越权
+    items, total = get_logs(db, limit=200, target_type="project_task", target_id=str(task_id))
+    return {"items": items, "total": total}
 
 
 @router.post("/{project_id}/tasks/{task_id}/move")

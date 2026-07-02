@@ -10,7 +10,7 @@ import MemberManageModal from './MemberManageModal';
 import TaskEditModal from './TaskEditModal';
 import GanttView from './gantt/GanttView';
 import { TaskCodeCell, TaskNameCell, TaskAssigneeCell } from './TaskRowCells';
-import { CODE_W, ASSIGNEE_W, LEFT_W } from './gantt/ganttUtils';
+import { CODE_W, ASSIGNEE_W, STATUS_W, LEFT_W } from './gantt/ganttUtils';
 import type { Project, ProjectStatus, ProjectTask, TaskStatus, TaskLink, TaskComment } from '../../types/project';
 
 const STATUSES: ProjectStatus[] = ['待启动', '进行中', '已完成', '已暂停', '已归档'];
@@ -249,7 +249,8 @@ export default function Projects() {
 
   // ---- Detail tab actions ----
   const reload = useCallback(() => {
-    if (selectedProjectId) loadTasks(selectedProjectId);
+    // 同时刷新任务表和甘特图(甘特按 refreshKey 重新拉取 /gantt 数据)
+    if (selectedProjectId) { loadTasks(selectedProjectId); setGanttKey((k) => k + 1); }
   }, [selectedProjectId, loadTasks]);
 
   const isManager = useMemo(() => can('project.task:create'), []);
@@ -634,9 +635,9 @@ export default function Projects() {
                       <thead className="bg-gray-50 border-b border-gray-200 sticky top-0 z-10">
                         <tr>
                           <th className="text-left pl-2 pr-4 py-2 text-sm font-medium text-gray-500 whitespace-nowrap" style={{ width: CODE_W }}>任务编号</th>
-                          <th className="text-left px-1 py-2 text-sm font-medium text-gray-500" style={{ width: LEFT_W - CODE_W - ASSIGNEE_W }}>任务名称</th>
+                          <th className="text-left px-1 py-2 text-sm font-medium text-gray-500" style={{ width: LEFT_W - CODE_W - ASSIGNEE_W - STATUS_W }}>任务名称</th>
                           <th className="text-left px-2 py-2 text-sm font-medium text-gray-500" style={{ width: ASSIGNEE_W }}>负责人</th>
-                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">状态</th>
+                          <th className="text-left px-2 py-2 text-sm font-medium text-gray-500" style={{ width: STATUS_W }}>状态</th>
                           <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">优先级</th>
                           <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">计划开始</th>
                           <th className="text-left px-2 py-2 text-sm font-medium text-gray-500">计划完成</th>
@@ -687,7 +688,7 @@ export default function Projects() {
                       projectId={selectedProjectId!}
                       canEdit={can('project.task:depend')}
                       refreshKey={ganttKey}
-                      project={currentProject ? { code: currentProject.code, name: currentProject.name, planned_start: currentProject.planned_start, planned_end: currentProject.planned_end, owner_name: currentProject.owner_name } : null}
+                      project={currentProject ? { code: currentProject.code, name: currentProject.name, status: currentProject.status, planned_start: currentProject.planned_start, planned_end: currentProject.planned_end, owner_name: currentProject.owner_name } : null}
                       expanded={expanded}
                       onExpandedChange={setExpanded}
                       scale={ganttScale}
@@ -699,9 +700,12 @@ export default function Projects() {
                   </div>
                 )}
 
-                <MemberManageModal open={memberOpen} projectId={selectedProjectId!} ownerId={currentProject.owner_id} onClose={() => setMemberOpen(false)} />
+                <MemberManageModal open={memberOpen} projectId={selectedProjectId!} ownerId={currentProject.owner_id}
+                  onClose={() => setMemberOpen(false)}
+                  onSaved={() => { loadProject(selectedProjectId!); loadTasks(selectedProjectId!); loadProjects(); }} />
                 <TaskEditModal open={editOpen} projectId={selectedProjectId!} task={editTask} parentId={editParentId}
-                               onClose={() => setEditOpen(false)} onSaved={() => { setEditOpen(false); reload(); }} />
+                               onClose={() => setEditOpen(false)} onSaved={() => { setEditOpen(false); reload(); }}
+                               onRefresh={() => reload()} />
                 <ConfirmModal open={!!delTask} content={`确认删除任务"${delTask?.name}"及其所有子任务?`}
                               onConfirm={confirmDelete} onCancel={() => setDelTask(null)} />
               </>

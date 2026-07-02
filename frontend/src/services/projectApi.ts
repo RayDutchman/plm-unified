@@ -26,6 +26,7 @@ export const projectApi = {
   reorderTask: (id: string, data: { task_id: string; new_parent_id?: string | null; new_sort_order: number }) =>
     api.post(`${base}/tasks/reorder`, data),
   deleteTask: (id: string, taskId: string) => api.delete(`${base}/${id}/tasks/${taskId}`),
+  listTaskLogs: (id: string, taskId: string) => api.get(`${base}/${id}/tasks/${taskId}/logs`),
   listLinks: (id: string, taskId: string) => api.get(`${base}/${id}/tasks/${taskId}/links`),
   addLink: (id: string, taskId: string, data: { entity_type: string; entity_id: string }) =>
     api.post(`${base}/${id}/tasks/${taskId}/links`, data),
