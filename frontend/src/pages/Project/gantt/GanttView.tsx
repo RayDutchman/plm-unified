@@ -3,7 +3,7 @@ import { projectApi } from '../../../services/projectApi';
 import type { GanttData, GanttTask } from '../../../types/project';
 import type { Scale } from './ganttUtils';
 import {
-  DAY_PX, ROW_H, BAR_H, LEFT_W, parseDate, daysBetween, addDays, fmtISO,
+  DAY_PX, ROW_H, BAR_H, LEFT_W, CODE_W, ASSIGNEE_W, STATUS_W, parseDate, daysBetween, addDays, fmtISO,
   computeRange, barBox, ticks, STATUS_FILL, depAnchors,
 } from './ganttUtils';
 import SharedLeftPanel from '../SharedLeftPanel';
@@ -35,7 +35,6 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   const [createDrag, setCreateDrag] = useState<{ id: string; anchorDay: number; isMilestone: boolean; startX: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
-  const calendarOuterRef = useRef<HTMLDivElement>(null);
   const movedRef = useRef(false);
   const [viewportW, setViewportW] = useState(0);
   const [pan, setPan] = useState<{ startX: number; startScroll: number; taskId?: string } | null>(null);
@@ -257,16 +256,16 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     /* eslint-disable-next-line */
   }, [createDrag, preview, px, projectId, range]);
 
-  // 测量可视宽度,用于把日历铺满界面
+  // 测量外层滚动容器宽度,用于把日历铺满界面
   useEffect(() => {
-    const el = calendarOuterRef.current;
+    const el = calendarScrollRef.current;
     if (!el) return;
     const measure = () => setViewportW(el.clientWidth);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [data]);
+  }, [data, hideLeftPanel]);
 
   // 拖动时间轴空白处左右平移(调整关注区域)
   const onPanDown = (e: React.MouseEvent, taskId?: string) => {
@@ -295,7 +294,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   if (data.tasks.length === 0) return <div className="p-8 text-center text-gray-400">该项目还没有任务,先在"项目详情"中添加任务。</div>;
 
   // 日历铺满可视宽度:不足时向后补天数填满
-  const availChartW = Math.max(0, viewportW);
+  const availChartW = Math.max(0, viewportW - (hideLeftPanel ? 0 : LEFT_W));
   const totalDays = Math.max(daysBetween(range.start, range.end) + 1, Math.ceil(availChartW / px));
   const chartW = totalDays * px;
   const chartH = (visibleTasks.length + taskRowOffset) * ROW_H;
@@ -325,19 +324,21 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     );
   });
 
-  const calendarPart = (
-    <div className="flex-1" ref={calendarOuterRef}>
-      <div ref={calendarScrollRef} className="overflow-x-auto" style={{ overflowY: 'hidden' }}>
-        <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10 flex items-center" style={{ width: chartW, height: ROW_H, cursor: pan ? 'grabbing' : 'grab' }}
-          onMouseDown={onPanDown}>
+  const dateHeader = (
+    <div className="bg-gray-50 border-b border-gray-200 relative flex items-center" style={{ width: chartW, height: ROW_H, flexShrink: 0, cursor: pan ? 'grabbing' : 'grab' }}
+      onMouseDown={onPanDown}>
           {tickList.map((tk, i) => (
             <div key={i} className={`absolute top-0 text-[10px] flex items-center ${tk.major ? 'text-gray-600' : 'text-gray-300'}`}
               style={{ left: tk.x, height: ROW_H, borderLeft: tk.major ? '1px solid #e5e7eb' : 'none', paddingLeft: 2 }}>
               {tk.label}
             </div>
           ))}
-        </div>
-        <svg ref={svgRef} width={chartW} height={chartH} className="block">
+  </div>
+  );
+
+  const svgPart = (
+    <div style={{ width: chartW, flexShrink: 0 }}>
+      <svg ref={svgRef} width={chartW} height={chartH} className="block">
           <defs>
             <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
               <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8" />
@@ -417,30 +418,51 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
               </g>
             );
           })}
-        </svg>
-      </div>
+      </svg>
     </div>
   );
 
   if (hideLeftPanel) {
-    return calendarPart;
+    return (
+      <div ref={calendarScrollRef} className="overflow-x-auto min-w-0 flex-1" style={{ overflowY: 'clip' }}>
+        <div className="sticky top-0 z-10">{dateHeader}</div>
+        {svgPart}
+      </div>
+    );
   }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="overflow-y-auto" style={{ maxHeight: '70vh' }}>
-        <div className="flex">
-          <SharedLeftPanel
-            tasks={visibleTasks}
-            expanded={expanded}
-            childMap={childMap}
-            onToggle={toggleExpand}
-            onRowClick={(id) => onRowClick?.(id)}
-            project={project}
-            hoveredId={hoveredId}
-            onHover={setHovered}
-          />
-          {calendarPart}
+      <div ref={calendarScrollRef} className="overflow-auto" style={{ maxHeight: '70vh' }}>
+        {/* 表头行:overflow-auto 直接子元素,sticky top-0 固定垂直 */}
+        <div className="sticky top-0 z-30 flex" style={{ height: ROW_H, width: LEFT_W + chartW }}>
+          {/* 左侧表头:sticky left-0 固定水平 */}
+          <div className="bg-gray-50 border-b border-gray-200 sticky left-0 z-30 flex items-center text-sm font-medium text-gray-500"
+            style={{ width: LEFT_W, height: ROW_H, flexShrink: 0 }}>
+            <span className="shrink-0 truncate text-left pl-2" style={{ width: CODE_W }}>任务编号</span>
+            <span className="px-1 flex-1 min-w-0 truncate text-left">任务名称</span>
+            <span className="px-1 shrink-0 truncate text-center" style={{ width: ASSIGNEE_W }}>负责人</span>
+            <span className="px-1 shrink-0 truncate text-center" style={{ width: STATUS_W }}>状态</span>
+          </div>
+          {/* 日期抬头:跟随水平滚动 */}
+          {dateHeader}
+        </div>
+        {/* 内容行:左侧任务列表 + 右侧图表,共用同一滚动容器 */}
+        <div className="flex" style={{ width: LEFT_W + chartW }}>
+          <div className="sticky left-0 z-20 bg-white" style={{ width: LEFT_W, flexShrink: 0 }}>
+            <SharedLeftPanel
+              tasks={visibleTasks}
+              expanded={expanded}
+              childMap={childMap}
+              onToggle={toggleExpand}
+              onRowClick={(id) => onRowClick?.(id)}
+              project={project}
+              hoveredId={hoveredId}
+              onHover={setHovered}
+              hideHeader
+            />
+          </div>
+          {svgPart}
         </div>
       </div>
     </div>
