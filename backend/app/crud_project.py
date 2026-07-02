@@ -166,7 +166,7 @@ def create_task(db: Session, project: Project, data: TaskCreate) -> ProjectTask:
     return t
 
 
-def update_task(db: Session, t: ProjectTask, data: TaskEdit) -> ProjectTask:
+def update_task(db: Session, t: ProjectTask, data: TaskEdit, actor: dict = None) -> ProjectTask:
     for field in ("name", "task_type", "status", "priority", "planned_start",
                   "planned_end", "actual_start", "actual_end", "description"):
         val = getattr(data, field)
@@ -176,7 +176,8 @@ def update_task(db: Session, t: ProjectTask, data: TaskEdit) -> ProjectTask:
         t.assignee_id = _uuid(data.assignee_id)
     _enforce_milestone_single_day(t)
     db.commit(); db.refresh(t)
-    auto_schedule(db, t.project_id)   # 前置改期 → 级联后置
+    # 前置改期 → 级联后置;被编辑任务自身的变更由 router 单独记录,故 skip
+    auto_schedule(db, t.project_id, actor=actor, skip_task_id=t.id)
     persist_rollup(db, t.project_id)
     db.refresh(t)
     return t
@@ -385,7 +386,7 @@ def _would_create_cycle(db: Session, project_id: uuid.UUID, pred_id, succ_id) ->
     return False
 
 
-def add_dep(db: Session, project_id: uuid.UUID, data: DepCreate) -> ProjectTaskDep:
+def add_dep(db: Session, project_id: uuid.UUID, data: DepCreate, actor: dict = None) -> ProjectTaskDep:
     pred = _uuid(data.predecessor_id); succ = _uuid(data.successor_id)
     if pred == succ:
         raise HTTPException(status_code=400, detail="任务不能依赖自身")
@@ -406,7 +407,7 @@ def add_dep(db: Session, project_id: uuid.UUID, data: DepCreate) -> ProjectTaskD
     d = ProjectTaskDep(project_id=project_id, predecessor_id=pred, successor_id=succ,
                        dep_type=data.dep_type, lag_days=data.lag_days)
     db.add(d); db.commit(); db.refresh(d)
-    auto_schedule(db, project_id)   # 新依赖 → 后置任务对齐
+    auto_schedule(db, project_id, actor=actor)   # 新依赖 → 后置任务对齐
     persist_rollup(db, project_id)
     return d
 
@@ -569,9 +570,29 @@ def persist_rollup(db: Session, project_id: uuid.UUID):
         db.commit()
 
 
-def auto_schedule(db: Session, project_id: uuid.UUID):
+def _log_auto_schedule(db: Session, actor: dict, shifted: list):
+    """把级联排期改期的任务写入操作记录,每个任务一条 '自动排期' 日志。"""
+    if not actor or not shifted:
+        return
+    from app.crud import create_log
+    for t, old_s, old_e, new_s, new_e in shifted:
+        parts = []
+        if old_s != new_s:
+            parts.append(f"计划开始：{_iso(old_s) or '-'}->{_iso(new_s) or '-'}")
+        if old_e != new_e:
+            parts.append(f"计划完成：{_iso(old_e) or '-'}->{_iso(new_e) or '-'}")
+        detail = "因前置任务调整；" + "；".join(parts) if parts else "因前置任务调整"
+        create_log(db, actor.get("user_id"), actor.get("username"), "自动排期",
+                   "project_task", str(t.id), detail, actor.get("ip"))
+
+
+def auto_schedule(db: Session, project_id: uuid.UUID, actor: dict = None, skip_task_id: uuid.UUID = None):
     """前向自动排期:有前置依赖的任务,其计划起止自动对齐到依赖约束(保留工期),
-    并沿依赖链级联。无前置或无工期的任务保持自身日期。"""
+    并沿依赖链级联。无前置或无工期的任务保持自身日期。
+
+    actor={user_id, username, ip} 时,把因级联排期而改期的后置任务写入操作记录
+    (每个被改期的任务一条 '自动排期' 日志,详情含计划起止的新旧值)。
+    skip_task_id:直接被用户编辑的任务,其变更已由调用方单独记录,这里不再重复记。"""
     tasks = db.query(ProjectTask).filter(
         ProjectTask.project_id == project_id, ProjectTask.deleted_at.is_(None)
     ).all()
@@ -595,6 +616,7 @@ def auto_schedule(db: Session, project_id: uuid.UUID):
     if len(topo) != len(tasks):
         return  # 异常成环,放弃排期
     changed = False
+    shifted = []  # 因级联而改期的任务:(task, 旧start, 旧end, 新start, 新end)
     for tid in topo:
         preds = pred_map.get(tid)
         t = by_id[tid]
@@ -619,11 +641,14 @@ def auto_schedule(db: Session, project_id: uuid.UUID):
             continue
         new_end = best + timedelta(days=d_len)
         if t.planned_start != best or t.planned_end != new_end:
+            if actor and tid != skip_task_id:
+                shifted.append((t, t.planned_start, t.planned_end, best, new_end))
             t.planned_start = best
             t.planned_end = new_end
             changed = True
     if changed:
         db.commit()
+        _log_auto_schedule(db, actor, shifted)
 
 
 def persist_rollup_all(db: Session):

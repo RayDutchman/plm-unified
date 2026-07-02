@@ -176,8 +176,10 @@ async def update_task(project_id: uuid.UUID, task_id: uuid.UUID, data: TaskEdit,
         return str(v)
     # 必须在 update_task 之前读旧值，update 后 SQLAlchemy 对象已被修改
     old_vals = {k: getattr(t, k, None) for k in changed}
-    result = _task_dict(db, crud_project.update_task(db, t, data))
     ip = request.client.host if request and request.client else None
+    # 传入 actor:级联改期的后置任务由 auto_schedule 单独写操作记录
+    actor = {"user_id": current_user.id, "username": current_user.username, "ip": ip}
+    result = _task_dict(db, crud_project.update_task(db, t, data, actor=actor))
     parts = []
     for k, new_val in changed.items():
         old_val = old_vals[k]
@@ -317,10 +319,13 @@ async def get_gantt(project_id: uuid.UUID, db: Session = Depends(get_db),
 
 @router.post("/{project_id}/auto-schedule")
 async def run_auto_schedule(project_id: uuid.UUID, db: Session = Depends(get_db),
-                            current_user: User = Depends(require_permission("project.task:depend"))):
+                            current_user: User = Depends(require_permission("project.task:depend")),
+                            request: Request = None):
     p = crud_project.get_project(db, project_id)
     enforce_object_policy("project_manager_or_admin", current_user, p)
-    crud_project.auto_schedule(db, project_id)
+    ip = request.client.host if request and request.client else None
+    actor = {"user_id": current_user.id, "username": current_user.username, "ip": ip}
+    crud_project.auto_schedule(db, project_id, actor=actor)
     crud_project.persist_rollup(db, project_id)
     return crud_project.get_gantt_data(db, project_id)
 
@@ -343,10 +348,13 @@ async def list_deps(project_id: uuid.UUID, db: Session = Depends(get_db),
 
 @router.post("/{project_id}/deps")
 async def add_dep(project_id: uuid.UUID, data: DepCreate, db: Session = Depends(get_db),
-                  current_user: User = Depends(require_permission("project.task:depend"))):
+                  current_user: User = Depends(require_permission("project.task:depend")),
+                  request: Request = None):
     p = crud_project.get_project(db, project_id)
     enforce_object_policy("project_manager_or_admin", current_user, p)
-    d = crud_project.add_dep(db, project_id, data)
+    ip = request.client.host if request and request.client else None
+    actor = {"user_id": current_user.id, "username": current_user.username, "ip": ip}
+    d = crud_project.add_dep(db, project_id, data, actor=actor)
     return {"id": str(d.id), "predecessor_id": str(d.predecessor_id),
             "successor_id": str(d.successor_id), "dep_type": d.dep_type, "lag_days": d.lag_days}
 
