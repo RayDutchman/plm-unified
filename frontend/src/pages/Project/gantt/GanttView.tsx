@@ -35,6 +35,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   const [createDrag, setCreateDrag] = useState<{ id: string; anchorDay: number; isMilestone: boolean; startX: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const calendarHeaderRef = useRef<HTMLDivElement>(null);
   const movedRef = useRef(false);
   const [viewportW, setViewportW] = useState(0);
   const [pan, setPan] = useState<{ startX: number; startScroll: number; taskId?: string } | null>(null);
@@ -267,6 +268,18 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     return () => ro.disconnect();
   }, [data]);
 
+  // 同步日历身体和表头的横向滚动
+  useEffect(() => {
+    const body = calendarScrollRef.current;
+    const header = calendarHeaderRef.current;
+    if (!body || !header) return;
+    const syncHeader = () => { header.scrollLeft = body.scrollLeft; };
+    const syncBody = () => { body.scrollLeft = header.scrollLeft; };
+    body.addEventListener('scroll', syncHeader);
+    header.addEventListener('scroll', syncBody);
+    return () => { body.removeEventListener('scroll', syncHeader); header.removeEventListener('scroll', syncBody); };
+  }, [data]);
+
   // 拖动时间轴空白处左右平移(调整关注区域)
   const onPanDown = (e: React.MouseEvent, taskId?: string) => {
     if (!calendarScrollRef.current) return;
@@ -277,7 +290,10 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     if (!pan) return;
     const onMove = (e: MouseEvent) => {
       if (Math.abs(e.clientX - pan.startX) > 4) movedRef.current = true;
-      if (calendarScrollRef.current) calendarScrollRef.current.scrollLeft = pan.startScroll - (e.clientX - pan.startX);
+      if (calendarScrollRef.current) {
+        calendarScrollRef.current.scrollLeft = pan.startScroll - (e.clientX - pan.startX);
+        if (calendarHeaderRef.current) calendarHeaderRef.current.scrollLeft = calendarScrollRef.current.scrollLeft;
+      }
     };
     const onUp = () => {
       if (!movedRef.current && pan.taskId) onRowClick?.(pan.taskId);
@@ -325,17 +341,21 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   });
 
   const calendarPart = (
-    <div ref={calendarScrollRef} className="overflow-x-auto flex-1" style={{ overflowY: 'hidden' }}>
-      <div className="relative" style={{ width: chartW }}>
-        <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10 flex items-center" style={{ width: chartW, height: ROW_H, cursor: pan ? 'grabbing' : 'grab' }}
-          onMouseDown={onPanDown}>
-          {tickList.map((tk, i) => (
-            <div key={i} className={`absolute top-0 text-[10px] flex items-center ${tk.major ? 'text-gray-600' : 'text-gray-300'}`}
-              style={{ left: tk.x, height: ROW_H, borderLeft: tk.major ? '1px solid #e5e7eb' : 'none', paddingLeft: 2 }}>
-              {tk.label}
-            </div>
-          ))}
+    <div className="flex-1">
+      <div className="sticky top-0 bg-gray-50 border-b border-gray-200 z-10 flex items-center overflow-hidden" style={{ height: ROW_H, cursor: pan ? 'grabbing' : 'grab' }}
+        onMouseDown={onPanDown}>
+        <div ref={calendarHeaderRef} className="overflow-x-auto" style={{ overflowY: 'hidden' }}>
+          <div className="flex items-center" style={{ width: chartW, height: ROW_H }}>
+            {tickList.map((tk, i) => (
+              <div key={i} className={`absolute top-0 text-[10px] flex items-center ${tk.major ? 'text-gray-600' : 'text-gray-300'}`}
+                style={{ left: tk.x, height: ROW_H, borderLeft: tk.major ? '1px solid #e5e7eb' : 'none', paddingLeft: 2 }}>
+                {tk.label}
+              </div>
+            ))}
+          </div>
         </div>
+      </div>
+      <div ref={calendarScrollRef} className="overflow-x-auto" style={{ overflowY: 'hidden' }}>
         <svg ref={svgRef} width={chartW} height={chartH} className="block">
           <defs>
             <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">

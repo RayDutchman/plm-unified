@@ -594,7 +594,13 @@ export default function Projects() {
                         onHover={setHoveredId}
                       />
                       {viewMode === 'table' ? (
-                        <div className="overflow-x-auto flex-1 bg-white">
+                        <div className="flex-1 bg-white">
+                          <div className="bg-gray-50 border-b border-gray-200 flex items-center text-sm font-medium text-gray-500 sticky top-0 z-10" style={{ height: 36 }}>
+                            <span className="px-2 shrink-0 truncate text-left" style={{ width: 64 }}>优先级</span>
+                            <span className="px-2 shrink-0 truncate text-left" style={{ width: 100 }}>计划开始</span>
+                            <span className="px-2 shrink-0 truncate text-left" style={{ width: 100 }}>计划完成</span>
+                            <span className="flex-1 px-4 text-right">关联/操作</span>
+                          </div>
                           {currentProject && (
                             <>
                               <div className="flex items-center bg-gray-50 border-b border-gray-200 text-sm" style={{ height: 36 }}>
