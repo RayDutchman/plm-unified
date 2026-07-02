@@ -405,7 +405,14 @@ def _link_dict(db, l):
     code = name = spec = remark = None
     table = _ENTITY_TABLE.get(l.entity_type)
     if table:
-        if table == "documents":
+        # part_masters 无 code/spec/remark 列(用 number 作件号、type 作规格),需单独查询,
+        # 否则复用 code/spec/remark 的 SQL 会因列不存在报错，导致整条 links 接口 500(关联对象不显示)
+        if table == "part_masters":
+            row = db.execute(
+                text("SELECT number AS code, name, type AS spec, NULL AS remark FROM part_masters WHERE id = :id"),
+                {"id": str(l.entity_id)}
+            ).fetchone()
+        elif table == "documents":
             row = db.execute(
                 text(f"SELECT code, name, NULL AS spec, remark FROM {table} WHERE id = :id"), {"id": str(l.entity_id)}
             ).fetchone()
