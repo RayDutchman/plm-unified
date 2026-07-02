@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: plm
       POSTGRES_PASSWORD: plmpass
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - ${PGDATA_HOST_PATH:-../plm_data/pgdata}:/var/lib/postgresql/data
     ports:
       - "5435:5432"  # 宿主机 5435，避免与已有 PostgreSQL 冲突
     healthcheck:
@@ -75,10 +75,14 @@ services:
       DATABASE_URL: postgresql://plm:plmpass@db:5432/plm_unified
       REDIS_URL: redis://redis:6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      JWT_SECRET: change-this-in-production
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-prod-0123456789abcdef}
       VAULT_PATH: /vault
+      CONVERSIONS_PATH: /data/conversions
+      UPLOADS_PATH: /uploads
     volumes:
       - vault_data:/vault
+      - conversions_data:/data/conversions
+      - ${UPLOADS_HOST_PATH:-../plm_data/uploads}:/uploads
     ports:
       - "8010:8000"  # 宿主机 8010，避免与 DocDoku 冲突
 
@@ -94,9 +98,21 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       BACKEND_URL: http://backend:8000
+      # ConversionServiceConfig 读取系统属性（通过 JAVA_OPTIONS 传入）：
+      #   ENDPOINT：回调 API base URL（默认 http://back:8080/docdoku-plm-server-rest/api）
+      #   VAULT_PATH：vault 文件根目录（与 backend 一致，共享 vault_data volume）
+      #   CONVERSIONS_PATH：转换临时文件目录（与 backend 共享，供 backend 回调时读取 GLB）
+      JAVA_OPTIONS: >-
+        -Dquarkus.http.host=0.0.0.0
+        -Djava.util.logging.manager=org.jboss.logmanager.LogManager
+        -DVAULT_PATH=/vault
+        -DCONVERSIONS_PATH=/data/conversions
+        -DENDPOINT=http://backend:8000/api
     volumes:
       - vault_data:/vault
+      - conversions_data:/data/conversions
 
 volumes:
   db_data:
   vault_data:
+  conversions_data:

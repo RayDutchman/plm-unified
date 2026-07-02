@@ -2,6 +2,19 @@ import axios, { AxiosError } from 'axios';
 import { useAuthStore } from '../stores/auth';
 import type { ECRListParams, ECRCreateData } from '../types';
 
+/** 需要自动注入 workspace_id 的 API 路径前缀 */
+const WS_API_PREFIXES = ['/parts', '/iterations', '/instances', '/nativecad', '/conversion', '/geometry', '/bom', '/issues', '/components'];
+
+/** 集中获取当前 workspace_id，兼容后端 snake_case / auth/me 返回 workspace_id */
+export function getWorkspaceId(): string {
+  const user = useAuthStore.getState().user as any;
+  const wsId = user?.workspaceId || user?.workspace_id;
+  if (!wsId) {
+    throw new Error('[workspace] 当前用户缺少 workspaceId，请检查登录响应 /auth/me');
+  }
+  return String(wsId);
+}
+
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
@@ -23,11 +36,27 @@ const api = axios.create({
   },
 });
 
-// 请求拦截器：自动添加 Token
+// 请求拦截器：自动添加 Token + workspace_id
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // 自动注入 workspace_id 到需要的 API
+  const url = config.url || '';
+  const needsWs = WS_API_PREFIXES.some(p => url.startsWith(p));
+  if (needsWs) {
+    try {
+      const wsId = getWorkspaceId();
+      if (config.method === 'get' || config.method === 'head' || config.method === 'delete') {
+        config.params = { workspace_id: wsId, ...(config.params || {}) };
+      } else {
+        // POST/PUT/PATCH: 只加到 query params（不篡改 body）
+        config.params = { workspace_id: wsId, ...(config.params || {}) };
+      }
+    } catch {
+      // workspace_id missing — 让请求自己报 400/422，不静默失败
+    }
   }
   return config;
 });
@@ -102,16 +131,16 @@ export const partsApi = {
     api.get('/parts/export', { params, responseType: 'blob' }),
 };
 
-// 部件 API
+// 部件 API（统一使用 PartMaster 端点，适配旧接口格式）
 export const assembliesApi = {
   list: (params?: { page?: number; page_size?: number; search?: string; status?: string; brief?: boolean; updated_since?: number; top_level?: boolean }) =>
-    api.get('/assemblies/', { params }),
-  get: (id: string) => api.get(`/assemblies/${id}`),
-  create: (data: unknown) => api.post('/assemblies/', data),
-  update: (id: string, data: unknown) => api.put(`/assemblies/${id}`, data),
-  delete: (id: string) => api.delete(`/assemblies/${id}`),
-  upgrade: (id: string, note?: string) => api.post(`/assemblies/${id}/upgrade`, { note }),
-  versions: (id: string) => api.get(`/assemblies/${id}/versions`),
+    api.get('/parts', { params }),
+  get: (id: string) => api.get(`/parts/${encodeURIComponent(id)}`),
+  create: (data: unknown) => api.post('/parts', data),
+  update: (id: string, data: unknown) => api.put(`/parts/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => api.delete(`/parts/${encodeURIComponent(id)}`),
+  upgrade: (id: string, note?: string) => api.post(`/parts/${encodeURIComponent(id)}/upgrade`, { note }),
+  versions: (id: string) => api.get(`/parts/${encodeURIComponent(id)}/versions`),
   exportBOM: (id: string) =>
     api.get(`/assemblies/${id}/bom/export`, { responseType: 'blob' }),
 };
@@ -236,34 +265,48 @@ export const dashboardApi = {
 // 实体-图文档关联 API
 export const entityDocumentsApi = {
   list: (entityType: 'part' | 'assembly' | 'configuration', entityId: string) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.get(`/${base}/${entityId}/documents`);
   },
   add: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, data: { document_id: string; category?: string; sort_order?: number }) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.post(`/${base}/${entityId}/documents`, data);
   },
   update: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, edocId: string, data: { category?: string; sort_order?: number }) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.put(`/${base}/${entityId}/documents/${edocId}`, data);
   },
   remove: (entityType: 'part' | 'assembly' | 'configuration', entityId: string, edocId: string) => {
-    const base = entityType === 'part' ? 'parts' : entityType === 'assembly' ? 'assemblies' : 'configurations/items';
+    const base = entityType === 'configuration' ? 'configurations/items' : 'components';
     return api.delete(`/${base}/${entityId}/documents/${edocId}`);
   },
 };
 
 // 附件下载
 export const attachmentApi = {
-  download: (id: string) => api.get(`/v2/attachments/${id}/download`, { responseType: 'blob' }),
+  download: (id: string) => api.get(`/attachments/${id}/download`, { responseType: 'blob' }),
   archiveTree: (id: string, token: string) =>
-    api.get<import('../types').ArchiveTreeResponse>(`/v2/attachments/${id}/archive-tree`, { params: { token } }),
+    api.get<import('../types').ArchiveTreeResponse>(`/attachments/${id}/archive-tree`, { params: { token } }),
+};
+
+// 部件附件 API
+export type PartAttachment = {
+  id: string;
+  file_name: string;
+  file_size: number;
+};
+
+export const partAttachmentsApi = {
+  list: (partId: string, category: string) =>
+    api.get<PartAttachment[]>(`/components/${partId}/attachments`, { params: { category } }),
+  remove: (partId: string, attachmentId: string) =>
+    api.delete(`/components/${partId}/attachments/${attachmentId}`),
 };
 
 // 媒体令牌 API（替代 ?token= 的会话 JWT）
 export const mediaApi = {
   token: (attId: string, action: 'preview' | 'direct-download' | 'gltf' | 'archive-tree' | 'extract-file' | 'office-pdf') =>
-    api.get(`/v2/attachments/${attId}/media-token`, { params: { action } }).then(r => r.data.token as string),
+    api.get(`/attachments/${attId}/media-token`, { params: { action } }).then(r => r.data.token as string),
 };
 
 // ============================================================
@@ -298,14 +341,16 @@ export const v2UploadApi = {
     file: File,
     entityType: string = 'documents',
     entityId: string,
-    onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void,
+    category?: string,
   ): Promise<{ id: string; file_name: string; file_size: number; file_path: string }> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('entity_type', entityType);
     formData.append('entity_id', entityId);
+    if (category) formData.append('category', category);
 
-    return uploadAxios.post('/v2/attachments/upload', formData, {
+    return uploadAxios.post('/attachments/upload', formData, {
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
@@ -323,7 +368,8 @@ export const v2UploadApi = {
     filename: string,
     fileSize: number,
     entityType: string = 'documents',
-    entityId: string
+    entityId: string,
+    category?: string,
   ): Promise<{
     upload_id: string;
     total_chunks: number;
@@ -334,8 +380,9 @@ export const v2UploadApi = {
     formData.append('file_size', String(fileSize));
     formData.append('entity_type', entityType);
     formData.append('entity_id', entityId);
+    if (category) formData.append('category', category);
 
-    return uploadAxios.post('/v2/attachments/chunk/init', formData)
+    return uploadAxios.post('/attachments/chunk/init', formData)
       .then(res => res.data);
   },
 
@@ -360,7 +407,7 @@ export const v2UploadApi = {
     formData.append('chunk_index', String(chunkIndex));
     formData.append('chunk', chunk);
 
-    return uploadAxios.post('/v2/attachments/chunk/upload', formData, {
+    return uploadAxios.post('/attachments/chunk/upload', formData, {
       onUploadProgress: (progressEvent) => {
         if (onProgress && progressEvent.total) {
           const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100);
@@ -384,7 +431,7 @@ export const v2UploadApi = {
     const formData = new FormData();
     formData.append('upload_id', uploadId);
 
-    return uploadAxios.post('/v2/attachments/chunk/complete', formData)
+    return uploadAxios.post('/attachments/chunk/complete', formData)
       .then(res => res.data);
   },
 };
@@ -395,14 +442,28 @@ export const CHUNK_THRESHOLD = CHUNK_SIZE * 2; // 10MB
 
 // 部件子项 API
 export const assemblyPartsApi = {
-  list: (assemblyId: string) => api.get(`/assemblies/${assemblyId}/parts`),
-  add: (assemblyId: string, data: { child_type: string; child_id: string; quantity: number }) =>
-    api.post(`/assemblies/${assemblyId}/parts`, data),
-  update: (assemblyId: string, itemId: string, data: { quantity: number }) =>
-    api.put(`/assemblies/${assemblyId}/parts/${itemId}`, data),
-  remove: (assemblyId: string, itemId: string) =>
-    api.delete(`/assemblies/${assemblyId}/parts/${itemId}`),
+  list: (partId: string) => {
+    const user = useAuthStore.getState().user;
+    return api.get(`/parts/${encodeURIComponent(partId)}/parts`, {});
+  },
+  add: (partId: string, data: { child_type: string; child_id: string; quantity: number }) => {
+    const user = useAuthStore.getState().user;
+    return api.post(`/parts/${encodeURIComponent(partId)}/parts`, data, {});
+  },
+  update: (partId: string, itemId: string, data: { quantity: number }) => {
+    const user = useAuthStore.getState().user;
+    return api.put(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, data, {});
+  },
+  remove: (partId: string, itemId: string) => {
+    const user = useAuthStore.getState().user;
+    return api.delete(`/parts/${encodeURIComponent(partId)}/parts/${itemId}`, {});
+  },
 };
+
+function wsParams(params?: Record<string, unknown>): Record<string, unknown> {
+  const user = useAuthStore.getState().user;
+  return { ...params };
+}
 
 // 自定义字段 API
 export const customFieldsApi = {

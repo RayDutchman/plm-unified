@@ -1,11 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../Modal';
-import { configurationApi, assemblyPartsApi, partsApi, assembliesApi, customFieldsApi } from '../../services/api';
-import type { ConfigPartItem, ConfigChildItem, CustomFieldDefinition, CustomFieldValue } from '../../types';
+import { configurationApi, assemblyPartsApi } from '../../services/api';
+import type { ConfigPartItem, ConfigChildItem } from '../../types';
 import EntityDocumentSection from '../EntityDocumentSection';
-import PartDetailContent from '../PartDetailContent';
-import AssemblyDetailContent from '../AssemblyDetailContent';
-import { useDataStore } from '../../stores/data';
+import PartMasterDetailModal from '../PartMasterDetailModal';
 
 interface Props {
   itemId: string | null;
@@ -23,13 +21,8 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
   const [noChildren, setNoChildren] = useState<Set<string>>(new Set());
   const [loadingChild, setLoadingChild] = useState<string | null>(null);
 
-  // 嵌套详情弹窗（点击行查看零件/部件详情）
-  const [nestedEntity, setNestedEntity] = useState<{ type: 'part' | 'assembly'; id: string } | null>(null);
-  const [nestedData, setNestedData] = useState<any>(null);
-  const [nestedLoading, setNestedLoading] = useState(false);
-  const [nestedCustomDefs, setNestedCustomDefs] = useState<CustomFieldDefinition[]>([]);
-  const [nestedCustomValues, setNestedCustomValues] = useState<Record<string, any>>({});
-  const nestedReqId = useRef(0);
+  // 点击关联零部件行 → 弹出零部件管理界面的零部件详情页（统一详情组件）
+  const [viewingPartId, setViewingPartId] = useState<string | null>(null);
 
   // 子构型项嵌套详情
   const [nestedConfigId, setNestedConfigId] = useState<string | null>(null);
@@ -52,9 +45,9 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [itemId]);
 
-  const togglePart = async (idx: string, entityId: string, entityType: string) => {
+  const togglePart = async (idx: string, entityId: string, _entityType: string) => {
     if (expandedParts[idx]) { setExpandedParts(p => { const n = { ...p }; delete n[idx]; return n; }); return; }
-    if (entityType !== 'assembly') return;
+    // 统一 PartMaster 模型下不再区分独立 assembly 类型：只要该零件有 BOM 子项即可展开。
     setLoadingPart(idx);
     try {
       const r = await assemblyPartsApi.list(entityId);
@@ -98,52 +91,13 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
     finally { setLoadingChild(null); }
   };
 
-  // 行点击 → 弹出嵌套详情（零件/部件）
-  const handleNestedView = async (type: 'part' | 'assembly', id: string) => {
-    const reqId = ++nestedReqId.current;
-    setNestedEntity({ type, id });
-    setNestedData(null);
-    setNestedLoading(true);
-    setNestedCustomDefs([]);
-    setNestedCustomValues({});
-    try {
-      const api = type === 'part' ? partsApi : assembliesApi;
-      const res = await api.get(id);
-      if (reqId !== nestedReqId.current) return;
-      setNestedData(res.data);
-      const allDefs = useDataStore.getState().customFieldDefs;
-      const entityType = type === 'part' ? 'part' : 'component';
-      const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes(entityType));
-      setNestedCustomDefs(defs);
-      if (defs.length > 0) {
-        try {
-          const valuesRes = await customFieldsApi.getValues(entityType, id);
-          if (reqId !== nestedReqId.current) return;
-          const vals: Record<string, any> = {};
-          (valuesRes.data || []).forEach((v: CustomFieldValue) => { vals[v.field_id] = v.value; });
-          setNestedCustomValues(vals);
-        } catch { /* optional */ }
-      }
-    } catch {
-      if (reqId !== nestedReqId.current) return;
-      setNestedData(null);
-    }
-    finally {
-      if (reqId === nestedReqId.current) {
-        setNestedLoading(false);
-      }
-    }
-  };
-
   const renderPartRow = (p: any, level: number, idx: string): React.ReactNode => {
-    const isAssembly = p.part_type === 'assembly' || p.entity_type === 'assembly';
+    // 是否含 BOM 子项：顶层用后端返回的 has_children，展开后的子项用 childType 映射出的 entity_type='assembly'
+    const isAssembly = p.has_children === true || p.part_type === 'assembly' || p.entity_type === 'assembly';
     const childRows = expandedParts[idx];
     const entityId = p.part_id || p.entity_id;
     const entityType = (p.part_type || p.entity_type || 'part');
-    const onClickRow = entityId ? () => handleNestedView(
-      entityType === 'assembly' ? 'assembly' : 'part',
-      entityId
-    ) : undefined;
+    const onClickRow = entityId ? () => setViewingPartId(entityId) : undefined;
     const rowCls = onClickRow ? 'cursor-pointer' : '';
     return (
       <>
@@ -156,11 +110,6 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
                 {childRows ? '▼' : '▶'}
               </button>
             )}
-          </td>
-          <td className={`px-3 py-2 text-sm ${rowCls}`} onClick={onClickRow}>
-            <span className={`px-1.5 py-0.5 rounded text-xs ${isAssembly ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
-              {isAssembly ? '部件' : '零件'}
-            </span>
           </td>
           <td className={`px-3 py-2 text-sm font-medium ${rowCls}`} onClick={onClickRow}>{p.part_detail?.code || p.entity_code || p.part_id}</td>
           <td className={`px-3 py-2 text-sm ${rowCls}`} onClick={onClickRow}>{p.part_detail?.name || p.entity_name || '-'}</td>
@@ -178,7 +127,7 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
           </td>
         </tr>
         {childRows && childRows.map((c: any, j: number) => renderPartRow(c, level + 1, `${idx}-${j}`))}
-        {loadingPart === idx && <tr><td colSpan={8} className="px-3 py-2 text-sm text-gray-400 text-center">加载中...</td></tr>}
+        {loadingPart === idx && <tr><td colSpan={7} className="px-3 py-2 text-sm text-gray-400 text-center">加载中...</td></tr>}
       </>
     );
   };
@@ -193,7 +142,7 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
     const name = p.part_detail?.name || p.entity_name || '-';
     const version = p.part_detail?.version || p.entity_version || '-';
     const status = p.part_detail?.status || p.status || '';
-    const onClickRow = entityId ? () => handleNestedView(entityType === 'assembly' ? 'assembly' : 'part', entityId) : undefined;
+    const onClickRow = entityId ? () => setViewingPartId(entityId) : undefined;
     const rowCls = onClickRow ? 'cursor-pointer' : '';
     return (
       <>
@@ -302,7 +251,6 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
               <table className="w-full text-sm border border-gray-200 rounded">
                 <thead className="bg-gray-50 border-b"><tr>
                   <th className="px-3 py-2 text-left text-gray-500 font-medium w-20">层级</th>
-                  <th className="px-3 py-2 text-left text-gray-500 font-medium w-16">类型</th>
                   <th className="px-3 py-2 text-left text-gray-500 font-medium">件号</th>
                   <th className="px-3 py-2 text-left text-gray-500 font-medium">中文名称</th>
                   <th className="px-3 py-2 text-left text-gray-500 font-medium w-14">版本</th>
@@ -345,30 +293,11 @@ export default function ConfigurationDetailModal({ itemId, onClose }: Props) {
       )}
     </Modal>
 
-    {/* ========== 嵌套详情弹窗（点击配置清单行查看零件/部件详情） ========== */}
-    <Modal
-      open={!!nestedEntity}
-      title={nestedEntity ? (nestedEntity.type === 'part' ? '零件详情' : '部件详情') : ''}
-      onClose={() => { nestedReqId.current++; setNestedEntity(null); setNestedData(null); }}
-      width="full"
-    >
-      <div className="max-h-[70vh] overflow-y-auto pr-1">
-      {nestedLoading ? (
-        <div className="py-8 text-center text-sm text-gray-400">加载中...</div>
-      ) : !nestedData ? (
-        <div className="py-8 text-center text-sm text-gray-400">加载失败</div>
-      ) : nestedEntity?.type === 'part' ? (
-        <PartDetailContent part={nestedData} customFieldDefs={nestedCustomDefs} customFieldValues={nestedCustomValues} />
-      ) : (
-        <AssemblyDetailContent
-          assembly={nestedData}
-          customFieldDefs={nestedCustomDefs}
-          customFieldValues={nestedCustomValues}
-          onSubItemClick={(item) => handleNestedView(item.childType === 'part' ? 'part' : 'assembly', item.child_id)}
-        />
-      )}
-      </div>
-    </Modal>
+    {/* ========== 点击关联零部件行 → 零部件管理界面的零部件详情页 ========== */}
+    <PartMasterDetailModal
+      identifier={viewingPartId}
+      onClose={() => setViewingPartId(null)}
+    />
 
     {/* ========== 子构型项嵌套详情弹窗 ========== */}
     <ConfigurationDetailModal

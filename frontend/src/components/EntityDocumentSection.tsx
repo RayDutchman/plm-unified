@@ -167,7 +167,7 @@ export default function EntityDocumentSection({ entityType, entityId, editable, 
     try {
       const mt = await mediaApi.token(fileId, 'direct-download');
       const a = document.createElement('a');
-      a.href = `/api/v2/attachments/${fileId}/direct-download?token=${encodeURIComponent(mt)}`;
+      a.href = `/api/attachments/${fileId}/direct-download?token=${encodeURIComponent(mt)}`;
       a.download = fileName || 'download';
       document.body.appendChild(a);
       a.click();
@@ -365,6 +365,7 @@ export default function EntityDocumentSection({ entityType, entityId, editable, 
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {docs.map((ed) => {
+                  if (!ed.document) return null;
                   const vals = docFieldValues[ed.document_id] || {};
                   const isAccessible = (ed.document as any).accessible !== false;
                   return (

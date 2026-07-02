@@ -15,18 +15,33 @@ const FIELD_TYPES = [
   { value: 'text', label: '单行文本' },
   { value: 'number', label: '数字' },
   { value: 'select', label: '下拉选择' },
+  { value: 'multiselect', label: '多选' },
 ] as const;
 
 const ENTITY_TYPES = [
-  { value: 'part', label: '零件' },
-  { value: 'component', label: '部件' },
+  { value: 'part', label: '零部件' },
   { value: 'document', label: '图文档' },
+  { value: 'configuration', label: '构型项' },
 ] as const;
+
+// 将后端 applies_to 数组归一化为展示用的标签列表
+function displayAppliesTo(applies_to: string[]): string[] {
+  return applies_to.map((v) => ENTITY_TYPES.find(e => e.value === v)?.label || v);
+}
+
+// 编辑时，将归一化的标签列表转回 checkbox 选中值（旧数据可能有 'component' 兼容处理）
+function expandAppliesTo(applies_to: string[]): string[] {
+  const normalized: string[] = [];
+  if (applies_to.includes('part') || applies_to.includes('assembly') || applies_to.includes('component')) normalized.push('part');
+  if (applies_to.includes('document')) normalized.push('document');
+  if (applies_to.includes('configuration')) normalized.push('configuration');
+  return normalized;
+}
 
 interface FieldFormData {
   name: string;
   field_key: string;
-  field_type: 'text' | 'number' | 'select';
+  field_type: 'text' | 'number' | 'select' | 'multiselect';
   options: string;
   is_required: boolean;
   applies_to: string[];
@@ -161,10 +176,10 @@ export default function Settings() {
     setFormData({
       name: field.name,
       field_key: field.field_key,
-      field_type: field.field_type as 'text' | 'number' | 'select',
+      field_type: field.field_type as 'text' | 'number' | 'select' | 'multiselect',
       options: (field.options || []).join('\n'),
       is_required: field.is_required,
-      applies_to: appliesToArray,
+      applies_to: expandAppliesTo(appliesToArray),
       sort_order: field.sort_order || 0,
     });
     setFormError('');
@@ -193,7 +208,7 @@ export default function Settings() {
       return;
     }
 
-    // applies_to 现在直接传递数组，不做字符串转换
+    // applies_to 现在直接传递数组
     const payload = {
       name: formData.name.trim(),
       field_key: formData.field_key.trim(),
@@ -267,7 +282,7 @@ export default function Settings() {
     setBatchConverting(true);
     setBatchStatus('正在启动...');
     try {
-      const { data } = await api.post('/v2/attachments/convert-pending');
+      const { data } = await api.post('/attachments/convert-pending');
       if (data.status === 'started') {
         setBatchStatus(`已开始，共 ${data.pending} 个待转换文件`);
         pollConvertStatus();
@@ -284,7 +299,7 @@ export default function Settings() {
   const pollConvertStatus = () => {
     const t = setInterval(async () => {
       try {
-        const { data } = await api.get('/v2/attachments/convert-status');
+        const { data } = await api.get('/attachments/convert-status');
         if (data.pending === 0) {
           clearInterval(t);
           setBatchStatus('✅ 全部转换完成');
@@ -478,9 +493,9 @@ export default function Settings() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex gap-1">
-                          {(Array.isArray(field.applies_to) ? field.applies_to : [field.applies_to]).map((type) => (
-                            <span key={type} className="px-2 py-0.5 text-xs bg-gray-100 rounded">
-                              {ENTITY_TYPES.find(e => e.value === type)?.label || type}
+                          {displayAppliesTo(field.applies_to || []).map((label) => (
+                            <span key={label} className="px-2 py-0.5 text-xs bg-gray-100 rounded">
+                              {label}
                             </span>
                           ))}
                         </div>
@@ -542,8 +557,8 @@ export default function Settings() {
                   <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
                     <div className="text-xs text-gray-500 mb-0.5">适用类型</div>
                     <div className="text-sm flex gap-1 flex-wrap">
-                      {(Array.isArray(viewingField.applies_to) ? viewingField.applies_to : [viewingField.applies_to]).map((type) => (
-                        <span key={type} className="px-2 py-0.5 text-xs bg-gray-100 rounded">{ENTITY_TYPES.find(e => e.value === type)?.label || type}</span>
+                      {displayAppliesTo(viewingField.applies_to || []).map((label) => (
+                        <span key={label} className="px-2 py-0.5 text-xs bg-gray-100 rounded">{label}</span>
                       ))}
                     </div>
                   </div>
@@ -821,7 +836,7 @@ export default function Settings() {
               <label className="block text-xs text-gray-500 mb-0.5">字段类型</label>
               <select
                 value={formData.field_type}
-                onChange={(e) => setFormData({ ...formData, field_type: e.target.value as 'text' | 'number' | 'select' })}
+                onChange={(e) => setFormData({ ...formData, field_type: e.target.value as 'text' | 'number' | 'select' | 'multiselect' })}
                 className="w-full text-sm px-2 py-1 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {FIELD_TYPES.map((type) => (
@@ -840,7 +855,7 @@ export default function Settings() {
               />
               <p className="mt-1 text-xs text-gray-400">越小越靠前</p>
             </div>
-            {formData.field_type === 'select' && (
+            {(formData.field_type === 'select' || formData.field_type === 'multiselect') && (
               <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 col-span-2">
                 <label className="block text-xs text-gray-500 mb-0.5">选项</label>
                 <textarea

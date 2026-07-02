@@ -46,7 +46,7 @@ export default function MaterialTab() {
       const res = await api.get(id);
       setEntityData(res.data);
       const allDefs = useDataStore.getState().customFieldDefs;
-      const entityType = type === 'part' ? 'part' : 'component';
+      const entityType = type === 'part' ? 'part' : 'assembly';
       const defs = allDefs.filter((d: CustomFieldDefinition) => d.applies_to?.includes(entityType));
       setEntityDefs(defs);
       if (defs.length > 0) {

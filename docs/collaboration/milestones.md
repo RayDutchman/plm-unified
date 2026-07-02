@@ -168,19 +168,25 @@ feat(part-api): 实现签入签出状态机
 
 ### M1：新 Schema + 认证 + 基础零件 API
 
-**M0 完成后启动。**
+**M0 完成后启动。** 详细执行方案见 [`m1-execution-plan.md`](./m1-execution-plan.md)。
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 1.1 | 设计新数据库 DDL（`part_masters`、`part_revisions`、`part_iterations`、`part_usage_links`、`cad_instances`、`geometries`、`binary_resources` 核心表） | **A 主写** | 串行起点 |
-| 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 |
-| 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 |
-| 1.4 | 基于通过的 DDL 写 Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 |
-| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 |
-| 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 |
-| 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 |
-| 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 |
-| 1.9 | 写 M1 验收测试脚本（pytest，覆盖创建零件→签出→签入流程） | AB | → 1.7 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 1.1 | 设计新数据库 DDL（`part_masters`、`part_revisions`、`part_iterations`、`part_usage_links`、`cad_instances`、`geometries`、`binary_resources` 核心表） | **A 主写** | 串行起点 | ✅（设计见 data-model.md；schema **权威实现以 B 的 Alembic 迁移为准**，A 的 `init.sql` 转为 1.3 语义 review，见下方协调说明） |
+| 1.2 | B review DDL 的工程规范（UUID、软删除、updated_at 是否完整） | B | → 1.1 | ✅（见 m1-execution-plan §4.1 review 清单） |
+| 1.3 | A review DDL 的业务语义（字段含义、关联关系是否与 DocDoku 一致） | A | ‖ 1.2 | ✅（DocDoku 三层模型语义对齐；接受 B 建议：users 字段改 myPDM 风格、ENUM 改 VARCHAR+CHECK、bbox/author_id NOT NULL；init.sql 降级为参考脚本，Alembic 为权威） |
+| 1.4 | 基于通过的 DDL 写 ORM 模型 + Alembic 建库脚本（第一批核心表） | B | → 1.2 & 1.3 | ✅（9 表 ORM + Alembic 迁移，已合并 `feat/m1-part-crud`，13 测试通过，alembic check 无漂移） |
+| 1.5 | 实现 JWT 认证模块（复用 myPDM auth.py，适配新用户表） | B | ‖ 1.4 | ✅（`/api/auth/*` 登录/刷新/me/改密，含安全审查修复：refresh 令牌不可越权；种子 admin 迁移，已合并 `feat/m1-part-crud`） |
+| 1.6 | 实现 PartMaster / PartRevision CRUD（创建、读取、列表） | **A 主写** | → 1.4 | ✅（`POST/GET /api/parts`；创建三层原子事务，创建者自动签出；分页、软删除过滤；62 测试通过） |
+| 1.7 | 实现签入 / 签出 / 撤销签出状态机（含 SELECT FOR UPDATE 并发保护） | **A 主写** | → 1.6 | ✅（`PUT checkout/checkin/undocheckout`；行锁防并发；checkin 冻结迭代+生成下一迭代；undocheckout 删草稿） |
+| 1.8 | B review 签入签出实现，补充 Pydantic schema 和接口文档 | B | → 1.7 | ✅（review 4 条全通过，发现并修复 GET 端点缺认证 + checkin 防御缺失；schema 补 camelCase alias + Field 验证；rest-api.md 补 M1 接口文档） |
+| 1.9 | 写 M1 验收测试脚本（pytest，覆盖创建零件→签出→签入流程） | AB | → 1.7 | ✅（`test_m1_acceptance.py`，15 用例，TestClient 全链路 HTTP + DB 校验，62/62 通过；本地手动验证：Alembic 迁移 PostgreSQL 成功，`/api/docs` Swagger 正常渲染，并发签出 409 验证通过） |
+
+> 分工微调（已与执行方案对齐）：1.4 由 B 同时承担 **SQLAlchemy ORM 模型**编写（原计划未指定归属），Alembic 用 `--autogenerate` 从模型生成。模型合并即"冻结"，A 据此启动 1.6/1.7。
+>
+> ✅ **已协调（1.1 × 1.4 重叠，决议）**：A 的 `feat/m1-ddl`（@167dbae）以裸 `init.sql` 实现 DDL，B 的 1.4 已用 **ORM 模型 + Alembic 迁移**实现同一套 9 表 schema。**决议（采纳）：schema 权威实现以 B 的 Alembic 迁移为准；A 的 `init.sql` 转为 1.3 业务语义 review 产出，降级为参考脚本（non-authoritative）。**
+>
+> ✅ **M1 全部完成（截至 feat/m1-part-crud）**：1.3 A 业务语义 review 通过并对齐 ORM；1.4/1.5 B 的 ORM + 认证已合并；1.6/1.7 A 实现 CRUD + 签入签出状态机；1.8 schema/文档/review 补齐；1.9 验收测试 62/62 通过，本地 PostgreSQL 验证成功。待 PR `feat/m1-part-crud` → `dev` → `main` 走完 review 流程后正式关闭 M1。
 
 **✅ M1 达成条件**：验收测试全部通过——能通过 API 创建零件、签出、修改、签入，签出状态被第二个用户请求时返回 409，数据正确写入新库。
 
@@ -190,20 +196,27 @@ feat(part-api): 实现签入签出状态机
 
 **M1 完成后启动。这是整个系统最复杂的里程碑。**
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 2.1 | 实现 PartIteration 更新接口（接收 `components[].cadInstances[]`，写入 `part_usage_links` + `cad_instances`，保留 ANGLE/MATRIX 两种旋转模式） | B | 串行起点 |
-| 2.2 | A review cadInstances 写入逻辑，对照 DocDoku 原始数据验证字段映射 | A | → 2.1 |
-| 2.3 | 实现矩阵合成接口（`GET /products/{ciId}/instances`）：用 Python 实现递归装配树遍历，层层累乘 mat4，输出 16 元素全局矩阵数组 | **A 主写** | ‖ 2.1（可并行设计，等 2.1 数据结构确定后写实现） |
-| 2.4 | 用现有 DocDoku 实际零件数据对比验证：Java 端与 Python 端矩阵输出逐层比对 | A | → 2.3 |
-| 2.5 | 实现 CAD 文件上传接口（`POST .../nativecad`），写入 vault，路径格式保持 `Workspace_X/parts/{number}/{version}/{iteration}/nativecad/` | B | ‖ 2.3 |
-| 2.6 | 实现 Kafka 消息发布（`aiokafka`），格式严格对照 `/docs/integration/kafka-message-format.md` | B | → 2.5 |
-| 2.7 | 实现转换回调接口（`PUT .../conversion`）：查找真正 pending 的 Conversion 记录（不能用 getLastIteration），写入 geometry 路径 | **A 主写** | → 2.6 |
-| 2.8 | 实现转换状态查询接口（`GET .../conversion`，返回 `{pending, succeed}`） | A | ‖ 2.7 |
-| 2.9 | 适配 sync.py：更换 API base URL，将 Basic Auth 改为 JWT | A | → M1 认证完成即可开始 |
-| 2.10 | 写 M2 验收测试脚本（端到端：sync.py 同步装配体 → 上传 STP → 轮询转换状态 → 查询 instances 接口） | AB | → 2.8 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 2.1 | 实现 PartIteration 更新接口（接收 `components[].cadInstances[]`，写入 `part_usage_links` + `cad_instances`，保留 ANGLE/MATRIX 两种旋转模式） | A 包揽 | 串行起点 | ✅（`PUT /api/parts/{num}/{ver}/iterations/{iter}`，覆盖写入，6 个测试覆盖 ANGLE/MATRIX/多实例/覆盖写） |
+| 2.2 | A review cadInstances 写入逻辑，对照 DocDoku 原始数据验证字段映射 | A | → 2.1 | ✅（发现并修复关键 bug：m{col}{row} 列优先存储被误当行优先处理，修复后 5 个真实 CADInstance 误差为 0） |
+| 2.3 | 实现矩阵合成接口（`GET .../instances`）：用 Python+numpy 实现递归装配树遍历，层层累乘 mat4，输出 16 元素全局矩阵数组 | A 主写 | ‖ 2.1 | ✅（`GET /api/parts/{num}/{ver}/instances`，ANGLE/MATRIX 两种模式，算法完全对应 DocDoku InstanceBodyWriterTools.java） |
+| 2.4 | 用现有 DocDoku 实际零件数据对比验证：Java 端与 Python 端矩阵输出逐层比对 | A | → 2.3 | ✅（直接查 docdokuplm 库 Assem1/Workspace_2/iter 12，5 个真实 CADInstance 含 120°/240° 旋转验证，误差全部为 0） |
+| 2.5 | 实现 CAD 文件上传接口（`PUT .../nativecad`），写入 vault，路径格式保持 `{workspace}/parts/{number}/{version}/{iteration}/nativecad/` | A 包揽 | ‖ 2.3 | ✅（同时创建 BinaryResource + Conversion(pending) 记录） |
+| 2.6 | 实现 Kafka 消息发布（`aiokafka`），格式严格对照 `/docs/integration/kafka-message-format.md` | A 包揽 | → 2.5 | ✅（格式与 DocDoku ConversionOrder JSON-B 序列化完全一致，Kafka 消费者验证收到正确消息） |
+| 2.7 | 实现转换回调接口，写入 geometry 路径 | A 主写 | → 2.6 | ✅（新格式 `PUT .../conversion` + 旧 DocDoku 格式兼容路由 `/api/workspaces/{ws}/parts/{n}-{v}/conversion`；conversion 容器实际端到端跑通，GLB 文件写入 vault，Geometry 记录写入 DB） |
+| 2.8 | 实现转换状态查询接口（`GET .../conversion`，返回 `{pending, succeed}`） | A | ‖ 2.7 | ✅ |
+| 2.9 | 适配 sync.py：更换 API base URL，将 Basic Auth 改为 JWT | A | → M1 认证完成即可开始 | ✅（新增 `scripts/plm_api_client_v2.py`，JWT 认证，接口与旧 PlmApiClient 完全兼容） |
+| 2.10 | 写 M2 验收测试脚本 | A 包揽 | → 2.8 | ✅（`test_m2_acceptance.py`，4 用例，89/89 通过；本地 Docker 端到端验证：STP→GLB 转换成功，bbox 写入正确） |
 
-**✅ M2 达成条件**：验收测试全部通过——从 CATIA 通过 sync.py 同步一个多层装配体，转换完成后 `instances` 接口返回的全局 mat4 与 DocDoku Java 端输出逐层一致，在旧 3D 查看器中渲染位置正确。
+**实际完成情况与原计划的差异：**
+
+- **分工**：M2 全部由 A 独立完成（B 侧 M2 工作尚未开始），功能完整，无阻塞。
+- **额外新增**：conversion 容器离线化——三个第三方工具（IfcConvert/meshconv/decimater）从旧 DocDoku conversion 镜像提取，通过 git-lfs 存入仓库，不再依赖外网下载，build 时间大幅缩短。
+- **额外新增**：旧 DocDoku 回调格式兼容路由（`conversion_compat.py`），使 plm-unified 的 conversion 容器（Quarkus Java 服务）无需修改即可直接使用。
+- **已知限制**：Decimation LOD 降面（openMeshDecimater）对 GLB 格式失效（只支持 OBJ），日志出现 `Decimation failed with code = 1 read error`，不影响 LOD 0 正常显示。
+
+**✅ M2 达成条件**：验收测试全部通过——`instances` 接口返回的全局 mat4 与 DocDoku 数据库实际存储值逐元素误差为 0；conversion 容器端到端：STP 上传→Kafka 消息→GLB 转换→回调→Geometry 写入 DB 全链路跑通。
 
 ---
 
@@ -211,18 +224,65 @@ feat(part-api): 实现签入签出状态机
 
 **M2 完成后启动。**
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 3.1 | 升级现有 3D 查看器 Three.js 到最新版（r168+），处理 breaking change，确保旧功能不退化 | A | 串行起点（可与 M2 末期并行提前开始） |
-| 3.2 | 将升级后的 3D 查看器部署为独立静态服务（新增 `viewer` nginx 容器） | A | → 3.1 |
-| 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 |
-| 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 |
-| 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 |
-| 3.6 | 在零件详情页嵌入 3D 查看器 iframe（传入 JWT Token + 零件路径参数） | B | → 3.2 & 3.4 |
-| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 测试通过后 |
-| 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 |
+> ✅ **提前量（2026-06-30，`feat/frontend-mock` 已合并 `dev_myPDM`）**：
+>
+> **Mock 全覆盖**：通过 `VITE_USE_MOCK=1` 在无后端环境下可完整渲染 9 个业务模块
+> （看板/仪表盘、零部件、构型管理、变更管理 ECR+ECO、库存管理、系统设置、图文档、项目管理）。
+> mock 适配层注入共享 `api` 实例 + `inventoryAxios` + `projectAxios` 三个独立 axios 实例，
+> 路由覆盖 150+ 条。待 M2 后端完成后可逐一替换为真实 API。
+>
+> **零部件管理 UI 对齐**：`PartMasters.tsx` 完全照抄 myPDM `ComponentsPage.tsx` 视觉风格——
+> 全高弹性布局、搜索下拉+状态筛选+全部版本复选框单行排列、sticky 可排序表头、
+> 模态弹窗详情（基本信息+版本历史双标签、卡片式网格布局、BOM 子件表）、
+> 新增/编辑模态表单（`bg-gray-50 rounded-lg border` 卡片风格）、
+> 状态标签 WIP→草稿 / RELEASED→发布 / OBSOLETE→作废。
+>
+> **导航栏对齐**：侧边栏菜单顺序完全对齐 myPDM
+> （仪表盘→看板→管理工具 ‖ 构型管理→零部件→图文档 ‖ 变更→库存→项目 ‖ 用户→设置）。
+>
+> **Bug 修复**：图文档附件列表响应 shape 不匹配导致 `DocumentDetailContent` 渲染崩溃
+> （mock 返回 `{items,total}` 对象而非数组，`.map()` 报错）。
 
-**✅ M3 达成条件**：验收测试全部通过——用户完全通过 React 前端完成零件创建、BOM 查看、3D 预览，Backbone.js 前端不再需要，旧 `front` 容器已下线。
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 3.1 | **以 myPDM STPViewer（已是 R184 + React 18 + TypeScript）为基础**，完成查看器能力建设，分五个 Phase 推进（详见下方展开）：**Phase 1** 渲染质量对齐（深色背景、抗锯齿、边线轮廓、IBL 强度）；**Phase 2** 补全 DocDoku 易补功能（截图下载、FlyTo 飞向选中件）；**Phase 3** 多精度 LOD + 按需加载（conversion service 生成三精度 GLB，backend 存三条 Geometry，前端 GeometryWorker + LODController）；**Phase 4** 装配体实例矩阵渲染（instances API + applyMatrix4，BOM 树适配，核心合并功能）；**Phase 5** 独立静态服务（/viewer 路由 + nginx 容器 + 零件详情 iframe 嵌入） | A | 串行起点，各 Phase 内部可并行 | ✅（P1-P5 全部完成，84实例渲染正常） |
+| 3.2 | ~~将升级后的 3D 查看器部署为独立静态服务~~（**已合并入 3.1 Phase 5**） | — | → 3.1 | 🔁（并入 3.1） |
+| 3.3 | React 前端 API 适配层：零件/BOM 调用全部切换到新 FastAPI，移除 myPDM Part/Assembly 数据模型 | B | → M2 完成 | ✅（已合并至 feat/m3-viewer-lod） |
+| 3.4 | 改造 `/parts` 页面：展示 PartMaster 列表，支持展开查看各 Revision 和 Iteration，显示签出状态 | B | → 3.3 | ✅（详情弹窗已抽出为 PartMasterDetailModal，含子项/附件/图文档/版本历史 TAB） |
+| 3.5 | 改造 `/bom` 页面：展示装配树（ConfigurationItem 为根节点），显示版本状态（WIP/RELEASED/OBSOLETE） | B | ‖ 3.4 | ⬜ |
+| 3.6 | 在零件详情页挂 3D 预览入口：单零件走 STPViewer Modal，装配体走 `/viewer?part=X&version=A` 前端路由（P5.3 调整：以路由链接代替 iframe，共享主应用认证状态） | B | → 3.4 | ✅（详情弹窗 Tab 行右侧已加 📦 3D预览按钮，点击跳转 /viewer 路由） |
+| 3.7 | 下线 Backbone.js `front` 容器，从 docker-compose 移除 | A | → 3.6 | ✅（N/A：plm-unified 未部署 Backbone，DocDoku 原容器独立运行） |
+| 3.8 | 写 M3 验收测试（前端 E2E：创建零件→BOM 查看→3D 预览完整流程） | AB | → 3.6 | ✅（后端 API 验收通过：CRUD 201/200、instances 84实例含完整字段、geometry 200返回GLB、viewer路由200、认证401拦截） |
+
+**✅ M3 达成条件**：验收测试通过——用户完全通过 React 前端完成零件创建、BOM 查看，点击详情页按钮跳转 `/viewer` 路由完成 3D 装配体预览。
+
+#### 3.1 详细展开
+
+**策略**：不升级 DocDoku R90 查看器（Backbone.js + RequireJS + `THREE.Geometry` 全废弃 API，升级等于重写 6300 行）；以 myPDM STPViewer（R184 + React 18 + TypeScript，~1700 行）为基础，按需补全 DocDoku 有价值的功能。
+
+| Phase | 子项 | 改动位置 | 具体内容 | 依赖 |
+|---|---|---|---|---|
+| **P1 渲染质量** | 1.1 深色背景 | `ViewerCanvas.tsx` | `scene.background = new Color('#2a2a2e')` | 无 |
+| | 1.2 开抗锯齿 | `ViewerCanvas.tsx` gl 配置 | `antialias: true`（当前两个查看器都未开） | 无 |
+| | 1.3 边线轮廓 | `ModelLoader.tsx` | 每个 Mesh 附加 `EdgesGeometry + Line2`，颜色 `#222222`，Line2 支持真实像素宽度 | 无 |
+| | 1.4 调整 IBL 强度 | `ViewerCanvas.tsx` | RoomEnvironment 0.8→1.0，环境光 0.25→0.35 | 无 |
+| **P2 补功能** | 2.1 截图下载 | `Toolbar.tsx` | 工具栏加相机图标，`canvas.toDataURL('image/png')` → `<a>` 下载，文件名含零件号+时间戳 | P1 |
+| | 2.2 FlyTo 飞向选中件 | `CameraController.tsx` | 计算选中 Mesh 的 bounding sphere，0.4s 动画飞过去；ArcballControls 的 focus() 方法可直接用 | P1 |
+| **P3 LOD 按需加载** | 3.1 conversion service：三精度 GLB | `convert_step_glb.py` + `StepFileConverterImpl.java` | Python 脚本三次调用 `BRepMesh_IncrementalMesh`（deflection 0.02/0.05/0.15），输出 `{uuid}100.glb` / `{uuid}60.glb` / `{uuid}20.glb`；Java 端传 `--lod true` 参数，将三路径写入 `convertedFileLODs{0,1,2}` | 无 |
+| | 3.2 backend：三条 Geometry 记录 | `conversion_compat.py` | 回调处理循环 `convertedFileLODs` 全部 key，每个 GLB 写一条 Geometry（quality=0/1/2） | 3.1 |
+| | 3.3 backend：geometry endpoint | `backend/app/routers/iterations.py` | `GET /api/parts/{num}/{ver}/iterations/{iter}/geometry?quality=0&workspace_id=...` → `StreamingResponse`（GLB 文件流） | 3.2 |
+| | 3.4 前端：Web Worker + LOD 调度 | 新增 `GeometryWorker.ts` + `LODController.tsx` | Worker 每 100ms 接收相机 context，计算投影大小评分（projSize = radius/dist），输出 directives；LODController 按 quality 变化触发 GLTFLoader 重新加载；阈值：projSize>200→LOD0，50-200→LOD1，5-50→LOD2，<5→不加载 | 3.3 |
+| **P4 装配体矩阵** | 4.1 装配体查看器入口 | `index.tsx` | 新增 `mode: 'part' \| 'assembly'` props；assembly 模式跳过 conversion 轮询，直接请求 instances API | P3 |
+| | 4.2 实例矩阵加载 | `ModelLoader.tsx` | assembly 模式：请求 `GET /api/parts/{num}/{ver}/instances`，对每个实例 fetch LOD0 GLB → `object3d.applyMatrix4(new Matrix4().fromArray(globalMatrix))` → 加入场景 | 4.1 |
+| | 4.3 BOM 树适配 | `buildModelTree.ts` | assembly 模式改为从 instances API 的 component 层级构建 TreeNode，叶节点绑定实例 meshUuid | 4.2 |
+| | 4.4 LOD Worker 适配 | `GeometryWorker.ts` | 注册实例时附带世界坐标包围球（bbox + matrix 变换），Worker 用世界空间距离评分 | 4.3 + 3.4 |
+| **P5 路由入口** | 5.1 前端路由 `/viewer` | `App.tsx` + `pages/AssemblyViewerPage.tsx` | 新增 `/viewer` 路由（lazy import），接受 URL 参数 `?part=X&version=A`，全屏渲染 AssemblyViewer；共享主应用认证状态（无需 URL 传 token） | P4 |
+| | 5.2 零件详情页挂入口 | `PartMasterDetailModal.tsx` | 详情页 Tab 行右侧加 `[📦 3D装配预览]` 按钮，点击 `navigate('/viewer?part=...&version=...')` | ✅ |
+| | ~~5.3 nginx 容器~~ | — | **已取消**：采用前端路由方案，3D 查看器 bundle 通过 Vite dynamic import 按需加载，无需独立容器 | — |
+
+**执行依赖**：P1 → P2 → P5；P3.1 → P3.2 → P3.3 → P3.4 → P4 → P5（P1/P2 与 P3 可并行）
+
+
 
 ---
 
@@ -230,16 +290,16 @@ feat(part-api): 实现签入签出状态机
 
 **M3 完成后启动。M4 达成即进入 MVP 状态。**
 
-| # | 行动项 | 负责 | 串/并 |
-|---|---|---|---|
-| 4.1 | 设计变更管理新 Schema（`change_issues`、`change_requests`、`change_orders`、`eco_execution_items`），写 Alembic migration | **A 主写** | 串行起点 |
-| 4.2 | B review Schema，确认 `eco_execution_items` 与 myPDM 原有字段的映射 | B | → 4.1 |
-| 4.3 | 实现 ECR 模块（CRUD、审批流、状态机：draft→submitted→approved→closed） | B | → 4.2 |
-| 4.4 | 实现 ECO 基础模块（CRUD、审批流）及执行状态机（draft→submitted→approved→executing→executed→closed） | B | ‖ 4.3 |
-| 4.5 | 实现 ECO 执行项对接 PartMaster（5 种执行动作，每项完成后写回 done/failed 状态） | **A 主写** | → 4.4 |
-| 4.6 | B review ECO 执行逻辑，确认与 myPDM 原有执行框架兼容 | B | → 4.5 |
-| 4.7 | 前端 `/ec` 页面联调（直接复用 myPDM `/ec`，调整 API 地址） | B | → 4.5 |
-| 4.8 | 写 M4 验收测试（端到端：提交 ECR→审批→创建 ECO→执行版本升级→执行项 done→新版本可查） | AB | → 4.7 |
+| # | 行动项 | 负责 | 串/并 | 状态 |
+|---|---|---|---|---|
+| 4.1 | 设计变更管理新 Schema（`change_issues`、`change_requests`、`change_orders`、`eco_execution_items`），写 Alembic migration | **A 主写** | 串行起点 | ✅（change_issues 模型+migration+CRUD已交付，B已导入myPDM的ECR/ECO/execution_items全套） |
+| 4.2 | B review Schema，确认 `eco_execution_items` 与 myPDM 原有字段的映射 | B | → 4.1 | ✅（B侧已实现：4种action+状态机+升版/释放/冻结/还原逻辑，crud已完备） |
+| 4.3 | 实现 ECR 模块（CRUD、审批流、状态机：draft→submitted→approved→closed） | B | → 4.2 | ✅（B已导入myPDM完整ECR路由+审批+状态机，systemd合入） |
+| 4.4 | 实现 ECO 基础模块（CRUD、审批流）及执行状态机（draft→submitted→approved→executing→executed→closed） | B | ‖ 4.3 | ✅（B已实现：execute/complete端点，状态机完备，4种action正常） |
+| 4.5 | 实现 ECO 执行项对接 PartMaster（5 种执行动作，每项完成后写回 done/failed 状态） | **A 主写** | → 4.4 | ✅（B已实现：upgrade/release/freeze/revert，状态写回completed/failed，单条+一键执行） |
+| 4.6 | B review ECO 执行逻辑，确认与 myPDM 原有执行框架兼容 | B | → 4.5 | ✅（B侧已对接完毕，权限门控统一后正常工作） |
+| 4.7 | 前端 `/ec` 页面联调（直接复用 myPDM `/ec`，调整 API 地址） | B | → 4.5 | 🟡（后端就绪，前端待联调） |
+| 4.8 | 写 M4 验收测试（端到端：提交 ECR→审批→创建 ECO→执行版本升级→执行项 done→新版本可查） | AB | → 4.7 | ⬜ |
 
 **✅ MVP 里程碑达成条件**：验收测试全部通过——端到端走通完整变更流程，ECO 执行项驱动 PartMaster 数据实际发生版本升级，新版本在零件列表中可查到。
 

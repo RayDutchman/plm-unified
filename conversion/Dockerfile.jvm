@@ -10,6 +10,7 @@
 #     * Controllable triangulation quality (BRepMesh_IncrementalMesh)
 #     * Output: .glb (self-contained, no MTL sidecar)
 #   - run-java.sh: copied from local (no longer pulls from fabric8 image)
+#   - 第三方工具（IfcConvert/meshconv/decimater）从仓库 tools/ 目录 COPY，不再联网下载
 FROM debian:bookworm-slim
 
 ARG CONVERTER_WHEELHOUSE_URL=""
@@ -18,9 +19,6 @@ ARG CONVERTER_PIP_EXTRA_INDEX_URL=""
 
 ENV JAVA_OPTIONS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
 ENV AB_ENABLED=jmx_exporter
-ENV IFCCONVERT_URL=https://github.com/IfcOpenShell/IfcOpenShell/releases/download/v0.5.0-preview2/IfcConvert-master-9ad68db-linux64.zip
-ENV MESHCONV_URL=http://www.patrickmin.com/meshconv/linux64/meshconv
-ENV DECIMATER_URL=https://github.com/docdoku/docdoku-plm-openmesh-decimater/raw/master/builds/decimater-linux-64.zip
 
 USER root
 
@@ -29,7 +27,7 @@ USER root
 #   - python3 + pip: for convert_step_glb.py
 #   - libgl1 libxrender1 libsm6 libxt6: required shared libs for cadquery-ocp/OCC
 #   - assimp-utils: for DAE/DXF converter (unchanged)
-#   - wget + unzip: for downloading IFCConvert and meshconv
+#   - unzip: for extracting tools if needed (wget 已移除，工具改为本地 COPY)
 RUN apt-get update -qqy \
  && apt-get install -qqy --no-install-recommends \
       openjdk-17-jre-headless \
@@ -41,7 +39,6 @@ RUN apt-get update -qqy \
       libsm6 \
       libxt6 \
       assimp-utils \
-      wget \
       unzip \
  && rm -rf /var/lib/apt/lists/*
 
@@ -68,17 +65,19 @@ RUN chmod +x /tmp/install-python-deps.sh \
     fi \
  && rm -rf /tmp/install-python-deps.sh /tmp/requirements-converter.txt /tmp/wheels/
 
-# Create directories and download third-party conversion tools
+# 创建目录结构
 RUN mkdir /deployments \
  && mkdir -p /data/vault /data/conversions \
- && mkdir -p /opt/ifcconvert /opt/meshconv /opt/decimater \
- && wget --quiet -O /opt/ifcconvert.zip ${IFCCONVERT_URL} \
- && wget --quiet -O /opt/meshconv/meshconv ${MESHCONV_URL} \
- && wget --quiet -O /opt/decimater.zip ${DECIMATER_URL} \
- && unzip -qq /opt/ifcconvert.zip -d /opt/ifcconvert \
- && unzip -qq /opt/decimater.zip -d /opt/ \
+ && mkdir -p /opt/ifcconvert /opt/meshconv /opt/decimater
+
+# 复制第三方转换工具（从仓库 tools/ 目录，无需联网）
+COPY tools/ifcconvert/ /opt/ifcconvert/
+COPY tools/meshconv/   /opt/meshconv/
+COPY tools/decimater/  /opt/decimater/
+RUN chmod +x /opt/ifcconvert/IfcConvert \
  && chmod +x /opt/meshconv/meshconv \
- && rm /opt/decimater.zip /opt/ifcconvert.zip
+ && chmod +x /opt/decimater/OpenMeshDecimater \
+ && chmod +x /opt/decimater/openMeshDecimater.sh
 
 COPY conversion-service/target/lib/* /deployments/lib/
 COPY conversion-service/target/*-runner.jar /deployments/app.jar

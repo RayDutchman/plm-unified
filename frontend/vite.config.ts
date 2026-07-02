@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 
 export default defineConfig({
   plugins: [react()],
@@ -11,13 +12,17 @@ export default defineConfig({
   },
   server: {
     port: 8080,
+    https: {
+      key: fs.readFileSync(path.resolve(__dirname, '../certs/selfsigned.key')),
+      cert: fs.readFileSync(path.resolve(__dirname, '../certs/selfsigned.crt')),
+    },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8010',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:8010',
         changeOrigin: true,
       },
     },
