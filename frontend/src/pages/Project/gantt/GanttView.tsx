@@ -22,9 +22,10 @@ interface Props {
   autoScheduleKey?: number;
   hideLeftPanel?: boolean;
   onHoverChange?: (taskId: string | null) => void;
+  hoveredId?: string | null;
 }
 
-export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClick, refreshKey, project, expanded: extExpanded, onExpandedChange, scale: extScale, onScaleChange, autoScheduleKey, hideLeftPanel, onHoverChange }: Props) {
+export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClick, refreshKey, project, expanded: extExpanded, onExpandedChange, scale: extScale, onScaleChange, autoScheduleKey, hideLeftPanel, onHoverChange, hoveredId: extHoveredId }: Props) {
   const [data, setData] = useState<GanttData | null>(null);
   const [intScale, setIntScale] = useState<Scale>('day');
   const scale = extScale ?? intScale;
@@ -35,12 +36,14 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   const [createDrag, setCreateDrag] = useState<{ id: string; anchorDay: number; isMilestone: boolean; startX: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const calendarScrollRef = useRef<HTMLDivElement>(null);
+  const dateHeaderTranslateRef = useRef<HTMLDivElement>(null);
   const movedRef = useRef(false);
   const [viewportW, setViewportW] = useState(0);
   const [pan, setPan] = useState<{ startX: number; startScroll: number; taskId?: string } | null>(null);
   const [scheduling, setScheduling] = useState(false);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const setHovered = (id: string | null) => { setHoveredId(id); onHoverChange?.(id); };
+  const [intHoveredId, setIntHoveredId] = useState<string | null>(null);
+  const hoveredId = extHoveredId ?? intHoveredId;
+  const setHovered = (id: string | null) => { setIntHoveredId(id); onHoverChange?.(id); };
   const [intExpanded, setIntExpanded] = useState<Set<string>>(new Set());
 
   const expanded = extExpanded ?? intExpanded;
@@ -267,6 +270,22 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     return () => ro.disconnect();
   }, [data, hideLeftPanel]);
 
+  // hideLeftPanel 模式:日期抬头不在 overflow-x:auto 容器内(否则 CSS 强制 overflow-y:hidden 拦截 sticky),
+  // 改用 transform 同步水平滚动位置,sticky top-0 相对外层垂直滚动容器生效
+  useEffect(() => {
+    if (!hideLeftPanel) return;
+    const content = dateHeaderTranslateRef.current;
+    const scroller = calendarScrollRef.current;
+    if (!content || !scroller) return;
+    const onScroll = () => {
+      content.style.transform = `translateX(${-scroller.scrollLeft}px)`;
+    };
+    onScroll();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => scroller.removeEventListener('scroll', onScroll);
+    // chartW 由 viewportW/data/scale 推导,这些变化时重新同步 transform
+  }, [hideLeftPanel, viewportW, data, scale]);
+
   // 拖动时间轴空白处左右平移(调整关注区域)
   const onPanDown = (e: React.MouseEvent, taskId?: string) => {
     if (!calendarScrollRef.current) return;
@@ -424,16 +443,25 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
 
   if (hideLeftPanel) {
     return (
-      <div ref={calendarScrollRef} className="overflow-x-auto min-w-0 flex-1" style={{ overflowY: 'clip' }}>
-        <div className="sticky top-0 z-10">{dateHeader}</div>
-        {svgPart}
+      <div className="min-w-0 flex-1">
+        {/* 日期抬头:不在 overflow 容器内,sticky top-0 穿透到外层垂直滚动容器;transform 同步水平位置 */}
+        <div className="sticky top-0 bg-gray-50" style={{ height: ROW_H, zIndex: 1 }}>
+          <div ref={dateHeaderTranslateRef} style={{ width: chartW, willChange: 'transform' }}>
+            {dateHeader}
+          </div>
+        </div>
+        {/* 图表区域:水平滚动 */}
+        <div ref={calendarScrollRef} className="overflow-x-auto" style={{ overflowY: 'hidden' }}>
+          {svgPart}
+        </div>
       </div>
     );
   }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div ref={calendarScrollRef} className="overflow-auto" style={{ maxHeight: '70vh' }}>
+      <div ref={calendarScrollRef} className="overflow-auto" style={{ maxHeight: '70vh' }}
+           onMouseLeave={() => setHovered(null)}>
         {/* 表头行:overflow-auto 直接子元素,sticky top-0 固定垂直 */}
         <div className="sticky top-0 z-30 flex" style={{ height: ROW_H, width: LEFT_W + chartW }}>
           {/* 左侧表头:sticky left-0 固定水平 */}

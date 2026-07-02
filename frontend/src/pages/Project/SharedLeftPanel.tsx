@@ -53,8 +53,7 @@ export default function SharedLeftPanel({ tasks, expanded, childMap, onToggle, o
           <div key={t.id}
             className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''}`}
             style={{ height: ROW_H }}
-            onMouseEnter={() => onHover?.(t.id)}
-            onMouseLeave={() => onHover?.(null)}>
+            onMouseEnter={() => onHover?.(t.id)}>
             <TaskCodeCell code={t.code} depth={t.depth} hasChildren={hasChildren}
               isExpanded={expanded.has(t.id)}
               onToggle={(e) => { e.stopPropagation(); onToggle(t.id); }}

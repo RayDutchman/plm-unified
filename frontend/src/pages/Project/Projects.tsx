@@ -581,6 +581,7 @@ export default function Projects() {
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden flex-1 min-h-0">
                   <div className="overflow-y-auto h-full bg-white" style={{ overflowX: 'hidden' }}
+                       onMouseLeave={() => setHoveredId(null)}
                        onDragLeave={() => { setDragOver(null); if (expandTimerRef.current) { clearTimeout(expandTimerRef.current); expandTimerRef.current = null; } }}>
                     <div className="flex">
                       <SharedLeftPanel
@@ -638,8 +639,7 @@ export default function Projects() {
                                         onDrop={(e) => handleDrop(t, e)}
                                         onClick={() => openEdit(t)}
                                         onMouseEnter={() => setHoveredId(t.id)}
-                                        onMouseLeave={() => setHoveredId(null)}
-                                        className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''} ${overdue ? 'bg-red-50' : ''} cursor-pointer transition-colors ${isDragInto ? 'bg-blue-50 ring-2 ring-primary-300 ring-inset' : ''} ${isDragging ? 'opacity-40' : ''}`}
+                                        className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''} ${overdue ? 'bg-red-50' : ''} cursor-pointer ${isDragInto ? 'bg-blue-50 ring-2 ring-primary-300 ring-inset' : ''} ${isDragging ? 'opacity-40' : ''}`}
                                         style={{ height: 36 }}>
                                         <span className="px-2 shrink-0 truncate" style={{ width: 64 }}>{t.priority}</span>
                                         <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_start || '—'}</span>
@@ -665,6 +665,7 @@ export default function Projects() {
                       ) : (
                         <GanttView
                           hideLeftPanel
+                          hoveredId={hoveredId}
                           onHoverChange={setHoveredId}
                           projectId={selectedProjectId!}
                           canEdit={can('project.task:depend')}
