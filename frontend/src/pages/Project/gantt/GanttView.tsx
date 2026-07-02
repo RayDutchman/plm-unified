@@ -23,9 +23,10 @@ interface Props {
   hideLeftPanel?: boolean;
   onHoverChange?: (taskId: string | null) => void;
   hoveredId?: string | null;
+  filteredTaskIds?: Set<string> | null;
 }
 
-export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClick, refreshKey, project, expanded: extExpanded, onExpandedChange, scale: extScale, onScaleChange, autoScheduleKey, hideLeftPanel, onHoverChange, hoveredId: extHoveredId }: Props) {
+export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClick, refreshKey, project, expanded: extExpanded, onExpandedChange, scale: extScale, onScaleChange, autoScheduleKey, hideLeftPanel, onHoverChange, hoveredId: extHoveredId, filteredTaskIds }: Props) {
   const [data, setData] = useState<GanttData | null>(null);
   const [intScale, setIntScale] = useState<Scale>('day');
   const scale = extScale ?? intScale;
@@ -129,7 +130,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
   const taskRowOffset = hasProject ? 1 : 0;
   const px = DAY_PX[scale];
 
-  // 构建父子映射 + 根据展开状态计算可见任务列表
+  // 构建父子映射 + 根据展开状态计算可见任务列表(应用外部筛选)
   const { childMap, visibleTasks, visRowIndex } = useMemo(() => {
     const cm: Record<string, GanttTask[]> = {};
     const tasks = data?.tasks || [];
@@ -140,10 +141,18 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     }
     const vis: GanttTask[] = [];
     const walk = (task: GanttTask) => {
-      vis.push(task);
-      const children = cm[task.id];
-      if (children && expanded.has(task.id)) {
-        for (const ch of children) walk(ch);
+      // 有筛选时只显示匹配任务(含祖先链);无筛选时按 expanded 展开
+      if (filteredTaskIds && filteredTaskIds.size > 0) {
+        if (!filteredTaskIds.has(task.id)) return;
+        vis.push(task);
+        const children = cm[task.id];
+        if (children) for (const ch of children) walk(ch);
+      } else {
+        vis.push(task);
+        const children = cm[task.id];
+        if (children && expanded.has(task.id)) {
+          for (const ch of children) walk(ch);
+        }
       }
     };
     const roots = cm['__root__'] || [];
@@ -151,7 +160,7 @@ export default function GanttView({ projectId, canEdit, onTaskUpdated, onRowClic
     const ri: Record<string, number> = {};
     vis.forEach((t, i) => { ri[t.id] = i; });
     return { childMap: cm, visibleTasks: vis, visRowIndex: ri };
-  }, [data, expanded]);
+  }, [data, expanded, filteredTaskIds]);
 
   const effTask = (t: GanttTask): GanttTask => {
     const p = preview[t.id];

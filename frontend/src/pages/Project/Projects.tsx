@@ -262,6 +262,36 @@ export default function Projects() {
   };
 
   // 将树形任务扁平化为 GanttTask[]，供 SharedLeftPanel 统一使用
+  // 筛选匹配的任务ID集合(含匹配任务的祖先链,保持树结构完整)
+  const filteredTaskIds = useMemo(() => {
+    if (!taskStatusFilter && !taskSearch) return new Set<string>();
+    const ids = new Set<string>();
+    const match = (t: ProjectTask): boolean => {
+      if (taskStatusFilter && t.status !== taskStatusFilter) return false;
+      if (!taskSearch) return true;
+      if (t.name.includes(taskSearch) || t.code.includes(taskSearch)) return true;
+      if (t.description && t.description.includes(taskSearch)) return true;
+      const links = taskLinks[t.id] || [];
+      if (links.some((l: TaskLink) =>
+        (l.entity_code && l.entity_code.includes(taskSearch)) ||
+        (l.entity_name && l.entity_name.includes(taskSearch))
+      )) return true;
+      const comments = taskComments[t.id] || [];
+      if (comments.some((c: TaskComment) => c.content.includes(taskSearch))) return true;
+      return false;
+    };
+    const collectAncestors = (t: ProjectTask): boolean => {
+      let childMatch = false;
+      for (const c of t.children || []) {
+        if (collectAncestors(c)) { ids.add(t.id); childMatch = true; }
+      }
+      if (match(t)) { ids.add(t.id); return true; }
+      return childMatch;
+    };
+    for (const t of tasks) collectAncestors(t);
+    return ids;
+  }, [taskStatusFilter, taskSearch, tasks, taskLinks, taskComments]);
+
   const { flatTasks, childMap, visibleLeftTasks } = useMemo(() => {
     const flat: GanttTask[] = [];
     const cm: Record<string, GanttTask[]> = {};
@@ -282,15 +312,32 @@ export default function Projects() {
       }
     };
     walk(tasks, null, 0);
+    const hasFilter = !!(taskStatusFilter || taskSearch);
     const vis: GanttTask[] = [];
     const walkVis = (task: GanttTask) => {
-      vis.push(task);
-      const children = cm[task.id];
-      if (children && expanded.has(task.id)) for (const ch of children) walkVis(ch);
+      // 有筛选时只显示匹配的任务(含祖先链),无筛选时按 expanded 展开
+      if (hasFilter) {
+        if (!filteredTaskIds.has(task.id)) return;
+        vis.push(task);
+        const children = cm[task.id];
+        if (children) for (const ch of children) walkVis(ch);
+      } else {
+        vis.push(task);
+        const children = cm[task.id];
+        if (children && expanded.has(task.id)) for (const ch of children) walkVis(ch);
+      }
     };
     (cm['__root__'] || []).forEach(walkVis);
     return { flatTasks: flat, childMap: cm, visibleLeftTasks: vis };
-  }, [tasks, expanded]);
+  }, [tasks, expanded, taskStatusFilter, taskSearch, filteredTaskIds]);
+
+  // ProjectTask id → 对象映射,供右侧表格行渲染时查找
+  const taskById = useMemo(() => {
+    const m: Record<string, ProjectTask> = {};
+    const walk = (ts: ProjectTask[]) => { for (const t of ts) { m[t.id] = t; if (t.children) walk(t.children); } };
+    walk(tasks);
+    return m;
+  }, [tasks]);
 
   // ---- Drag & Drop ----
   const expandNode = useCallback((tid: string) => {
@@ -621,43 +668,38 @@ export default function Projects() {
                               </div>
                               {(() => {
                                 const rightRows: JSX.Element[] = [];
-                                const walk = (ts: ProjectTask[], depth: number) => {
-                                  for (const t of ts) {
-                                    if (taskStatusFilter && t.status !== taskStatusFilter) { if (t.children) walk(t.children, depth + 1); continue; }
-                                    if (taskSearch && !subtreeHasMatch(t)) continue;
-                                    const isOpen = expanded.has(t.id);
-                                    const overdue = isOverdue(t);
-                                    const isDragAbove = dragOver?.taskId === t.id && dragOver?.position === 'above';
-                                    const isDragBelow = dragOver?.taskId === t.id && dragOver?.position === 'below';
-                                    const isDragInto = dragOver?.taskId === t.id && dragOver?.position === 'into';
-                                    const isDragging = dragTask?.id === t.id;
-                                    if (isDragAbove) rightRows.push(<div key={t.id + '-above'} className="h-1"><div className="h-1 bg-primary-500 rounded-full mx-1" /></div>);
-                                    rightRows.push(
-                                      <div key={t.id} draggable
-                                        onDragStart={(e) => handleDragStart(t, e)} onDragEnd={handleDragEnd}
-                                        onDragOver={(e) => handleDragOver(t, e)} onDragLeave={handleDragLeave}
-                                        onDrop={(e) => handleDrop(t, e)}
-                                        onClick={() => openEdit(t)}
-                                        onMouseEnter={() => setHoveredId(t.id)}
-                                        className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''} ${overdue ? 'bg-red-50' : ''} cursor-pointer ${isDragInto ? 'bg-blue-50 ring-2 ring-primary-300 ring-inset' : ''} ${isDragging ? 'opacity-40' : ''}`}
-                                        style={{ height: 36 }}>
-                                        <span className="px-2 shrink-0 truncate" style={{ width: 64 }}>{t.priority}</span>
-                                        <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_start || '—'}</span>
-                                        <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_end || '—'}</span>
-                                        <span className="px-2 flex-1 min-w-0 truncate text-gray-500" title={t.description || undefined}>{t.description || '—'}</span>
-                                        <div className="shrink-0 flex items-center justify-end px-4 text-gray-400" onClick={(e) => e.stopPropagation()}>
-                                          {(t.link_count ?? 0) > 0 && <span className="mr-2">🔗 {t.link_count}</span>}
-                                          {isManager && <button onClick={() => openCreate(t.id)} className="text-primary-600 text-sm mr-2">+子</button>}
-                                          {can('project.task:delete') && <button onClick={() => setDelTask(t)} className="text-red-600 text-sm">删除</button>}
-                                        </div>
+                                for (const gt of visibleLeftTasks) {
+                                  const t = taskById[gt.id];
+                                  if (!t) continue;
+                                  const overdue = isOverdue(t);
+                                  const isDragAbove = dragOver?.taskId === t.id && dragOver?.position === 'above';
+                                  const isDragBelow = dragOver?.taskId === t.id && dragOver?.position === 'below';
+                                  const isDragInto = dragOver?.taskId === t.id && dragOver?.position === 'into';
+                                  const isDragging = dragTask?.id === t.id;
+                                  if (isDragAbove) rightRows.push(<div key={t.id + '-above'} className="h-1"><div className="h-1 bg-primary-500 rounded-full mx-1" /></div>);
+                                  rightRows.push(
+                                    <div key={t.id} draggable
+                                      onDragStart={(e) => handleDragStart(t, e)} onDragEnd={handleDragEnd}
+                                      onDragOver={(e) => handleDragOver(t, e)} onDragLeave={handleDragLeave}
+                                      onDrop={(e) => handleDrop(t, e)}
+                                      onClick={() => openEdit(t)}
+                                      onMouseEnter={() => setHoveredId(t.id)}
+                                      className={`flex items-center border-b border-gray-100 text-sm ${hoveredId === t.id ? 'bg-primary-50' : ''} ${overdue ? 'bg-red-50' : ''} cursor-pointer ${isDragInto ? 'bg-blue-50 ring-2 ring-primary-300 ring-inset' : ''} ${isDragging ? 'opacity-40' : ''}`}
+                                      style={{ height: 36 }}>
+                                      <span className="px-2 shrink-0 truncate" style={{ width: 64 }}>{t.priority}</span>
+                                      <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_start || '—'}</span>
+                                      <span className="px-2 shrink-0 truncate text-gray-500" style={{ width: 100 }}>{t.planned_end || '—'}</span>
+                                      <span className="px-2 flex-1 min-w-0 truncate text-gray-500" title={t.description || undefined}>{t.description || '—'}</span>
+                                      <div className="shrink-0 flex items-center justify-end px-4 text-gray-400" onClick={(e) => e.stopPropagation()}>
+                                        {(t.link_count ?? 0) > 0 && <span className="mr-2">🔗 {t.link_count}</span>}
+                                        {isManager && <button onClick={() => openCreate(t.id)} className="text-primary-600 text-sm mr-2">+子</button>}
+                                        {can('project.task:delete') && <button onClick={() => setDelTask(t)} className="text-red-600 text-sm">删除</button>}
                                       </div>
-                                    );
-                                    if (isDragBelow) rightRows.push(<div key={t.id + '-below'} className="h-1"><div className="h-1 bg-primary-500 rounded-full mx-1" /></div>);
-                                    if (isOpen && t.children) walk(t.children, depth + 1);
-                                  }
-                                };
-                                walk(tasks, 0);
-                                return <>{rightRows.length > 0 ? rightRows : tasks.length === 0 ? <div className="px-4 py-8 text-center text-gray-400">暂无任务</div> : null}</>;
+                                    </div>
+                                  );
+                                  if (isDragBelow) rightRows.push(<div key={t.id + '-below'} className="h-1"><div className="h-1 bg-primary-500 rounded-full mx-1" /></div>);
+                                }
+                                return <>{rightRows.length > 0 ? rightRows : tasks.length === 0 ? <div className="px-4 py-8 text-center text-gray-400">暂无任务</div> : <div className="px-4 py-8 text-center text-gray-400">无匹配任务</div>}</>;
                               })()}
                             </>
                           )}
@@ -667,6 +709,7 @@ export default function Projects() {
                           hideLeftPanel
                           hoveredId={hoveredId}
                           onHoverChange={setHoveredId}
+                          filteredTaskIds={filteredTaskIds.size > 0 ? filteredTaskIds : null}
                           projectId={selectedProjectId!}
                           canEdit={can('project.task:depend')}
                           refreshKey={ganttKey}
