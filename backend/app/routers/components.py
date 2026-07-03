@@ -56,7 +56,28 @@ def list_attachments(
     )
     if category:
         q = q.filter(PartAttachment.category == category)
-    return q.order_by(PartAttachment.created_at.desc()).all()
+    attachments = q.order_by(PartAttachment.iteration_id.desc().nulls_last(), PartAttachment.created_at.desc()).all()
+
+    # 补充 iteration_number 方便前端分组
+    from app.models.part import PartIteration
+    result = []
+    for att in attachments:
+        item = {
+            "id": str(att.id),
+            "file_name": att.file_name,
+            "file_size": att.file_size,
+            "file_path": att.file_path,
+            "category": att.category,
+            "created_at": att.created_at.isoformat() if att.created_at else None,
+            "iteration_id": str(att.iteration_id) if att.iteration_id else None,
+            "iteration_number": None,
+        }
+        if att.iteration_id:
+            it = db.get(PartIteration, att.iteration_id)
+            if it:
+                item["iteration_number"] = it.iteration
+        result.append(item)
+    return result
 
 
 @router.delete("/{part_master_id}/attachments/{attachment_id}")

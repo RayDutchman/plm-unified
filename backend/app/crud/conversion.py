@@ -175,6 +175,7 @@ async def save_native_cad_file(
     db.add(PartAttachment(
         id=uuid.uuid4(),
         part_master_id=revision.part_master_id,
+        iteration_id=iteration.id,
         category="cad",
         file_name=filename,
         file_size=file_size,

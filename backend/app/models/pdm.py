@@ -16,4 +16,5 @@ class PartAttachment(Base):
     file_size = Column(Integer)
     file_path = Column(String(512))
     file_hash = Column(String(64))
+    iteration_id = Column(UUID(as_uuid=True), ForeignKey("part_iterations.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

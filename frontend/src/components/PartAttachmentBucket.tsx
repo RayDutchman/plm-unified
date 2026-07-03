@@ -126,34 +126,51 @@ export default function PartAttachmentBucket({ partId, category, label, editable
         ) : items.length === 0 && !uploading ? (
           <div className="px-4 py-6 text-center text-sm text-gray-400">暂无附件</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-3 py-2 text-left text-gray-500 font-medium">文件名</th>
-                <th className="px-3 py-2 text-left text-gray-500 font-medium w-24">大小</th>
-                <th className="px-3 py-2 text-center text-gray-500 font-medium w-32">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {items.map((att) => (
-                <tr key={att.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-2"><span className="text-primary-600">{att.file_name}</span></td>
-                  <td className="px-3 py-2 text-gray-500">{fmtSize(att.file_size)}</td>
-                  <td className="px-3 py-2 text-center whitespace-nowrap">
-                    <span className="inline-flex items-center gap-2">
-                      <button type="button" onClick={() => handlePreview(att.id, att.file_name)} className="text-blue-600 hover:text-blue-800 text-xs">预览</button>
-                      <button type="button" onClick={() => handleDownload(att.id, att.file_name)} className="text-primary-600 hover:text-primary-800 text-xs">下载</button>
-                      {editable && (
-                        <button type="button" onClick={() => handleDelete(att.id)} disabled={deletingId === att.id} className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xs">
-                          {deletingId === att.id ? '删除中...' : '删除'}
-                        </button>
-                      )}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div>
+            {(() => {
+              // 按 iteration 分组
+              const grouped = new Map<string | null, PartAttachment[]>();
+              for (const a of items) {
+                const key = a.iteration_id || '__null__';
+                if (!grouped.has(key)) grouped.set(key, []);
+                grouped.get(key)!.push(a);
+              }
+              return Array.from(grouped.entries()).map(([key, atts]) => {
+                const first = atts[0];
+                const iterLabel = first.iteration_number
+                  ? `迭代 #${first.iteration_number}`
+                  : '未标记迭代';
+                return (
+                  <div key={key}>
+                    <div className="px-3 py-1.5 bg-gray-100 text-xs text-gray-500 font-medium border-b">
+                      {iterLabel} ({atts.length})
+                    </div>
+                    <table className="w-full text-sm">
+                      <tbody className="divide-y divide-gray-100">
+                        {atts.map((att) => (
+                          <tr key={att.id} className="hover:bg-gray-50">
+                            <td className="px-3 py-2"><span className="text-primary-600">{att.file_name}</span></td>
+                            <td className="px-3 py-2 text-gray-500">{fmtSize(att.file_size)}</td>
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              <span className="inline-flex items-center gap-2">
+                                <button type="button" onClick={() => handlePreview(att.id, att.file_name)} className="text-blue-600 hover:text-blue-800 text-xs">预览</button>
+                                <button type="button" onClick={() => handleDownload(att.id, att.file_name)} className="text-primary-600 hover:text-primary-800 text-xs">下载</button>
+                                {editable && (
+                                  <button type="button" onClick={() => handleDelete(att.id)} disabled={deletingId === att.id} className="text-red-500 hover:text-red-700 disabled:opacity-50 text-xs">
+                                    {deletingId === att.id ? '删除中...' : '删除'}
+                                  </button>
+                                )}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              });
+            })()}
+          </div>
         )}
       </div>
 

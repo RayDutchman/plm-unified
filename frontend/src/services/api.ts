@@ -294,6 +294,8 @@ export type PartAttachment = {
   id: string;
   file_name: string;
   file_size: number;
+  iteration_id: string | null;
+  iteration_number: number | null;
 };
 
 export const partAttachmentsApi = {
