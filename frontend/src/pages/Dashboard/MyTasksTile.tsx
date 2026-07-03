@@ -32,7 +32,7 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
           {items.slice(0, 4).map((t) => {
             const od = overdueDays(t.planned_end, now);
             return (
-              <Link key={t.task_id} to={"/projects"} className="flex items-center gap-2 text-sm hover:bg-gray-50 rounded px-1">
+              <Link key={t.task_id} to={`/projects?project_id=${t.project_id}&task_id=${t.task_id}`} className="flex items-center gap-2 text-sm hover:bg-gray-50 rounded px-1">
                 <span className="w-3.5 h-3.5 border border-gray-300 rounded-sm shrink-0" />
                 <span className="truncate flex-1 text-gray-700">{t.name}</span>
                 <span className={`text-xs shrink-0 ${od > 0 ? 'text-red-500' : 'text-gray-400'}`}>

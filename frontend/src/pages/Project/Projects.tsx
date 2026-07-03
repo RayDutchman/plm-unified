@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useProjectStore } from '../../stores/project';
 import { projectApi } from '../../services/projectApi';
 import { usersApi } from '../../services/api';
@@ -50,6 +51,8 @@ export default function Projects() {
   useHeaderTabs(tabs, tab, handleTabChange);
 
   const { projects, currentProject, loadProjects, loadProject, tasks, loadTasks, loading } = useProjectStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingTaskIdRef = useRef<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -85,12 +88,36 @@ export default function Projects() {
 
   useEffect(() => { loadProjects(); }, [loadProjects]);
 
+  // 从仪表盘"我的任务"跳转时，自动选中项目并打开任务编辑弹窗
+  useEffect(() => {
+    const pid = searchParams.get('project_id');
+    const tid = searchParams.get('task_id');
+    if (pid) {
+      setSelectedProjectId(pid);
+      setTabState('detail');
+      if (tid) pendingTaskIdRef.current = tid;
+      setSearchParams({}, { replace: true });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (selectedProjectId && tab === 'detail') {
       loadProject(selectedProjectId);
       loadTasks(selectedProjectId);
     }
   }, [selectedProjectId, tab, loadProject, loadTasks]);
+
+  // 任务加载完成后，如果 URL 携带了 task_id，自动打开编辑弹窗
+  useEffect(() => {
+    if (!pendingTaskIdRef.current || tasks.length === 0) return;
+    const task = findTaskById(tasks, pendingTaskIdRef.current);
+    if (task) {
+      setEditTask(task);
+      setEditParentId(null);
+      setEditOpen(true);
+      pendingTaskIdRef.current = null;
+    }
+  }, [tasks]);
 
   const collectTaskIds = useCallback((ts: ProjectTask[]): string[] => {
     const ids: string[] = [];
