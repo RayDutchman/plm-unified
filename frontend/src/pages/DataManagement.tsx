@@ -14,10 +14,9 @@ interface SoftDeletedStats {
 }
 
 const TABLE_LABELS: Record<string, string> = {
-  parts: '零件',
-  assemblies: '部件',
+  part_masters: '零件主数据',
+  part_revisions: '零件版本',
   documents: '图文档',
-  bom_items: 'BOM 关系',
   ecrs: 'ECR 变更请求',
   ecos: 'ECO 变更指令',
   configuration_items: '构型项',

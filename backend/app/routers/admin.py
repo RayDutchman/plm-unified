@@ -16,7 +16,7 @@ async def get_soft_deleted_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("admin.soft_delete:read"))
 ):
-    tables = ["documents", "bom_items", "ecrs", "ecos", "configuration_items"]
+    tables = ["documents", "ecrs", "ecos", "configuration_items", "part_masters", "part_revisions"]
     stats = {}
 
     for tbl in tables:
@@ -52,14 +52,14 @@ async def purge_soft_deleted(
     if not tables:
         raise HTTPException(status_code=400, detail="请指定要清理的表")
 
-    allowed_tables = {"documents", "bom_items", "ecrs", "ecos", "configuration_items"}
+    allowed_tables = {"documents", "ecrs", "ecos", "configuration_items", "part_masters", "part_revisions"}
     for tbl in tables:
         if tbl not in allowed_tables:
             raise HTTPException(status_code=400, detail=f"无效的表名: {tbl}")
 
     before_date = body.get("before_date")
 
-    purge_order = ["bom_items", "ecos", "ecrs", "configuration_items", "documents"]
+    purge_order = ["part_revisions", "part_masters", "ecos", "ecrs", "configuration_items", "documents"]
     ordered = [t for t in purge_order if t in tables]
 
     deleted_counts = {}
