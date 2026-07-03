@@ -12,6 +12,7 @@ const ACTION_CLASS: Record<string, string> = {
   '删除任务': 'bg-red-100 text-red-800',
   '软删除图文档': 'bg-red-100 text-red-800',
   '任务状态变更': 'bg-blue-100 text-blue-800',
+  '图文档状态变更': 'bg-blue-100 text-blue-800',
   '更新图文档': 'bg-gray-100 text-gray-700',
   '图文档升版': 'bg-purple-100 text-purple-800',
   '上传附件': 'bg-blue-50 text-blue-700',

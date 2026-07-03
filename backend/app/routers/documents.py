@@ -27,6 +27,53 @@ from app.crud import get_logs
 
 router = APIRouter(prefix="/documents", tags=["图文档管理"])
 
+_DOCUMENT_FIELD_LABELS = {
+    "code": "编号",
+    "name": "名称",
+    "status": "状态",
+    "remark": "备注",
+    "group_ids": "关联用户组",
+}
+
+
+def _norm_value(v):
+    """统一比较值：空字符串与 None 视为等价。"""
+    if v == '' or v is None:
+        return None
+    return str(v)
+
+
+def _format_doc_field_change(field: str, old_val, new_val) -> str | None:
+    """格式化图文档单字段变更详情。"""
+    label = _DOCUMENT_FIELD_LABELS.get(field, field)
+    if field == "group_ids":
+        old_set = set(str(x) for x in (old_val or []))
+        new_set = set(str(x) for x in (new_val or []))
+        if old_set == new_set:
+            return None
+        added = new_set - old_set
+        removed = old_set - new_set
+        parts = []
+        if added:
+            parts.append(f"增加 {len(added)} 个")
+        if removed:
+            parts.append(f"移除 {len(removed)} 个")
+        return f"{label}：{', '.join(parts)}"
+    if _norm_value(old_val) == _norm_value(new_val):
+        return None
+    return f"{label}：{old_val or '-'} -> {new_val or '-'}"
+
+
+def _format_file_size(bytes_size: int | None) -> str:
+    """格式化文件大小。"""
+    if bytes_size is None:
+        return "-"
+    if bytes_size < 1024:
+        return f"{bytes_size} B"
+    if bytes_size < 1024 * 1024:
+        return f"{bytes_size / 1024:.1f} KB"
+    return f"{bytes_size / (1024 * 1024):.1f} MB"
+
 
 def _resolve_group_names(db: Session, gids: set) -> list:
     if not gids:
@@ -179,7 +226,7 @@ async def create_document(
     if group_ids:
         db.commit()
     ip = request.client.host if request.client else None
-    create_log(db, current_user.id, current_user.username, "创建图文档", "document", str(d.id), f"编号:{d.code}", ip)
+    create_log(db, current_user.id, current_user.username, "创建图文档", "document", str(d.id), f"编号:{d.code} 名称:{d.name}", ip)
     return {
         "id": d.id, "code": d.code, "name": d.name,
         "version": d.version, "status": d.status,
@@ -244,17 +291,54 @@ async def update_document(
         if existing:
             raise HTTPException(status_code=400, detail="该编号和版本的组合已存在")
     update_data = body.model_dump(exclude_unset=True)
+
+    # 记录更新前旧值，用于生成操作记录
+    changed_fields = [k for k in update_data.keys() if k != "group_ids"]
+    old_vals = {k: getattr(d, k, None) for k in changed_fields}
+    old_group_ids = list(get_document_group_ids(db, d.id))
+
     group_ids = update_data.pop("group_ids", None)
     if group_ids is not None:
         db.query(DocumentGroupLink).filter(DocumentGroupLink.document_id == doc_id).delete()
         for gid in set(group_ids):
             db.add(DocumentGroupLink(document_id=doc_id, group_id=gid))
+
+    # 状态变更单独判断，与任务操作记录保持一致
+    status_changed = False
+    old_status = None
+    new_status = update_data.get("status")
+    if "status" in update_data:
+        old_status = d.status
+        status_changed = old_status != new_status
+
     for field, value in update_data.items():
         setattr(d, field, value)
     db.commit()
     db.refresh(d)
+
     ip = request.client.host if request.client else None
-    create_log(db, current_user.id, current_user.username, "更新图文档", "document", str(doc_id), None, ip)
+
+    # 状态变更单独记录
+    if status_changed:
+        create_log(db, current_user.id, current_user.username, "图文档状态变更", "document", str(doc_id), f"状态：{old_status} -> {new_status}", ip)
+
+    # 其他字段变更生成详情
+    other_parts = []
+    for field, value in update_data.items():
+        if field == "status":
+            continue
+        part = _format_doc_field_change(field, old_vals.get(field), value)
+        if part:
+            other_parts.append(part)
+    if group_ids is not None:
+        part = _format_doc_field_change("group_ids", old_group_ids, group_ids)
+        if part:
+            other_parts.append(part)
+
+    if other_parts:
+        detail = "; ".join(other_parts)
+        create_log(db, current_user.id, current_user.username, "更新图文档", "document", str(doc_id), detail, ip)
+
     creator_name = ""
     if d.creator_id:
         c = db.query(UserModel).filter(UserModel.id == d.creator_id).first()
@@ -322,7 +406,7 @@ async def delete_document(
     d.deleted_at = func.now()
     db.commit()
     ip = request.client.host if request.client else None
-    create_log(db, current_user.id, current_user.username, "软删除图文档", "document", str(doc_id), f"编号:{d.code}", ip)
+    create_log(db, current_user.id, current_user.username, "软删除图文档", "document", str(doc_id), f"编号:{d.code} 名称:{d.name}", ip)
     return {"message": "图文档已软删除"}
 
 
@@ -364,7 +448,7 @@ async def upload_document_attachment(
     db.commit()
 
     ip = request.client.host if request.client else None
-    create_log(db, current_user.id, current_user.username, "上传附件", "document_att", str(doc_id), f"文件:{body.file_name}", ip)
+    create_log(db, current_user.id, current_user.username, "上传附件", "document_att", str(doc_id), f"文件:{body.file_name} 大小:{_format_file_size(result['file_size'])}", ip)
     return {"id": att.id, "file_name": att.file_name, "file_size": att.file_size, "created_at": att.created_at}
 
 
@@ -460,7 +544,7 @@ async def delete_attachment(
     db.delete(att)
     db.commit()
     ip = request.client.host if request.client else None
-    create_log(db, current_user.id, current_user.username, "删除附件", "document_att", str(doc_id), f"文件ID:{att_id}", ip)
+    create_log(db, current_user.id, current_user.username, "删除附件", "document_att", str(doc_id), f"文件:{att.file_name}", ip)
     return {"message": "附件已删除"}
 
 
