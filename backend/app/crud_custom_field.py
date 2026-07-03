@@ -122,9 +122,18 @@ def get_custom_field_values_batch(db: Session, entity_type, entity_ids):
     return dict(output)
 
 
+def _value_to_display(field_def, value_text, value_number, value_json):
+    """把数据库中存储的自定义字段值转换为可读字符串。"""
+    if field_def.field_type == 'number':
+        return str(value_number) if value_number is not None else None
+    if field_def.field_type == 'multiselect':
+        return ', '.join(value_json) if value_json else None
+    return value_text
+
+
 def set_custom_field_values(db: Session, entity_type, entity_id, values):
-    """批量设置自定义字段值，返回实际发生变更的字段数量。"""
-    changed_count = 0
+    """批量设置自定义字段值，返回变更详情列表 [(字段名称, 旧值, 新值), ...]。"""
+    changed = []
     for item in values:
         field_def = get_custom_field_definition(db, item.field_id)
         if not field_def:
@@ -150,8 +159,11 @@ def set_custom_field_values(db: Session, entity_type, entity_id, values):
         elif field_def.field_type == 'multiselect':
             value_json = item.value if isinstance(item.value, list) else None
 
+        old_display = _value_to_display(field_def, existing.value_text, existing.value_number, existing.value_json) if existing else None
+        new_display = _value_to_display(field_def, value_text, value_number, value_json)
+
         if existing:
-            # 只有当值真正变化时才更新，并计入变更数
+            # 只有当值真正变化时才更新，并记录变更
             if (existing.value_text != value_text or
                 existing.value_number != value_number or
                 existing.value_json != value_json):
@@ -159,7 +171,7 @@ def set_custom_field_values(db: Session, entity_type, entity_id, values):
                 existing.value_number = value_number
                 existing.value_json = value_json
                 existing.updated_at = datetime.utcnow()
-                changed_count += 1
+                changed.append((field_def.name, old_display, new_display))
         else:
             # 原无值且新值也为空，不创建记录
             if value_text is None and value_number is None and value_json is None:
@@ -175,9 +187,9 @@ def set_custom_field_values(db: Session, entity_type, entity_id, values):
             if item.id:
                 new_val.id = item.id
             db.add(new_val)
-            changed_count += 1
+            changed.append((field_def.name, old_display, new_display))
     db.commit()
-    return changed_count
+    return changed
 
 
 def assert_entity_editable(db: Session, entity_type: str, entity_id, user_role: str):

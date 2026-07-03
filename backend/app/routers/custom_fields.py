@@ -160,11 +160,13 @@ async def set_values(
     if entity_type not in ('part', 'component', 'assembly', 'document', 'configuration'):
         raise HTTPException(status_code=400, detail="entity_type 必须为 part、component/assembly、document 或 configuration")
     crud_custom_field.assert_entity_editable(db, entity_type, entity_id, current_user.role)
-    changed_count = crud_custom_field.set_custom_field_values(db, entity_type, entity_id, batch.values)
+    changed = crud_custom_field.set_custom_field_values(db, entity_type, entity_id, batch.values)
     ip = request.client.host if request.client else None
-    # 只有实际发生变更时才记录操作日志，避免前端批量保存时产生空变更记录
-    if changed_count > 0:
-        create_log(db, current_user.id, current_user.username, "更新自定义字段值", entity_type, str(entity_id), f"{changed_count}个字段", ip)
+    # 只有实际发生变更时才记录操作日志，并在详情中记录每个字段的新旧值
+    if changed:
+        parts = [f"{name}：{old_val or '-'} -> {new_val or '-'}" for name, old_val, new_val in changed]
+        detail = "; ".join(parts)
+        create_log(db, current_user.id, current_user.username, "更新自定义字段值", entity_type, str(entity_id), detail, ip)
     return {"message": "字段值已更新"}
 
 
