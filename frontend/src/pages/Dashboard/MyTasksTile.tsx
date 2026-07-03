@@ -85,7 +85,7 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
                   >
                     <div className="flex items-center gap-2 text-xs min-w-0">
                       <span className="text-gray-500 shrink-0" title={t.code}>{t.code}</span>
-                      <span className={`truncate flex-1 min-w-0 ${od > 0 ? 'text-red-700' : 'text-gray-800'}`} title={t.name}>{t.name}</span>
+                      <span className={`shrink-0 ${od > 0 ? 'text-red-700' : 'text-gray-800'}`} title={t.name}>{t.name}</span>
                       <span className="text-gray-400 truncate flex-1 min-w-0" title={t.description || ''}>{t.description || ''}</span>
                       <span className={`px-1 rounded shrink-0 ${STATUS_CLS[t.status] || 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
                       <span className="text-gray-400 shrink-0">{startStr}</span>
