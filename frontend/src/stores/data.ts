@@ -122,9 +122,9 @@ export const useDataStore = create<DataState>()(
           ]);
 
           set({
-            parts: partsRes.status === 'fulfilled' ? extractData<PartBrief>(partsRes.value.data) : [],
-            assemblies: assembliesRes.status === 'fulfilled' ? extractData<AssemblyBrief>(assembliesRes.value.data) : [],
-            documents: documentsRes.status === 'fulfilled' ? extractData<DocumentBrief>(documentsRes.value.data) : [],
+            parts: partsRes.status === 'fulfilled' ? extractData<PartBrief>(partsRes.value.data).filter((p) => !p.deleted_at) : [],
+            assemblies: assembliesRes.status === 'fulfilled' ? extractData<AssemblyBrief>(assembliesRes.value.data).filter((a) => !a.deleted_at) : [],
+            documents: documentsRes.status === 'fulfilled' ? extractData<DocumentBrief>(documentsRes.value.data).filter((d) => !d.deleted_at) : [],
             customFieldDefs: fieldsRes.status === 'fulfilled' ? extractData<CustomFieldDefinition>(fieldsRes.value.data) : [],
             configItems: configRes.status === 'fulfilled' ? extractData<ConfigItemBrief>(configRes.value.data) : [],
             lastSyncTime: Math.floor(Date.now() / 1000),

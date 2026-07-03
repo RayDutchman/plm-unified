@@ -133,25 +133,30 @@ export default function AssemblyPartPicker({
   const partsList = storeParts.length > 0 ? storeParts : fetchedParts;
   const assembliesList = storeAssemblies.length > 0 ? storeAssemblies : fetchedAssemblies;
 
-  /* 合并所有零件+部件为一个列表 */
+  /* 合并零件+部件,按 id 去重(partsApi 和 assembliesApi 都调用 /parts 端点,返回相同列表) */
   const allCandidates = useMemo<CandidateItem[]>(() => {
     const excludeIds = new Set([
       ...existingChildIds,
       ...ancestorIds,
       ...(currentAssemblyId ? [currentAssemblyId] : []),
     ]);
+    const seen = new Set<string>();
     const result: CandidateItem[] = [];
 
     for (const p of partsList) {
-      if (!excludeIds.has(p.id)) {
+      if (!excludeIds.has(p.id) && !seen.has(p.id)) {
         const pAny = p as any;
-        result.push({ id: p.id, code: pAny.number || p.code || '', name: p.name, version: pAny.latestVersion || p.version || 'A', status: pAny.latestStatus || p.status || 'WIP', spec: pAny.spec || pAny.type || '', type: 'part' });
+        const isAssembly = !!(pAny.isAssembly || pAny.childCount > 0);
+        seen.add(p.id);
+        result.push({ id: p.id, code: pAny.number || p.code || '', name: p.name, version: pAny.latestVersion || p.version || 'A', status: pAny.latestStatus || p.status || 'WIP', spec: pAny.spec || pAny.type || '', type: isAssembly ? 'component' : 'part' });
       }
     }
     for (const a of assembliesList) {
-      if (!excludeIds.has(a.id)) {
+      if (!excludeIds.has(a.id) && !seen.has(a.id)) {
         const aAny = a as any;
-        result.push({ id: a.id, code: aAny.number || a.code || '', name: a.name, version: aAny.latestVersion || a.version || 'A', status: aAny.latestStatus || a.status || 'WIP', spec: aAny.spec || aAny.type || '', type: 'component' });
+        const isAssembly = !!(aAny.isAssembly || aAny.childCount > 0);
+        seen.add(a.id);
+        result.push({ id: a.id, code: aAny.number || a.code || '', name: a.name, version: aAny.latestVersion || a.version || 'A', status: aAny.latestStatus || a.status || 'WIP', spec: aAny.spec || aAny.type || '', type: isAssembly ? 'component' : 'part' });
       }
     }
     return result;
