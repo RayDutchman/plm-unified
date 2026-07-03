@@ -169,6 +169,12 @@ async def save_native_cad_file(
         start_date=now,
     )
     db.add(conversion)
+
+    # 更新 PartMaster.updated_at（上传 STP 不直接修改 PartMaster 行）
+    master = db.get(PartMaster, revision.part_master_id)
+    if master:
+        master.updated_at = now
+
     db.commit()
     db.refresh(br)
     return br

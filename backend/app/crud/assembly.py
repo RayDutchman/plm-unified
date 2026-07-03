@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 import numpy as np
@@ -153,6 +154,9 @@ def write_components(
             cad_inst = _build_cad_instance(usage_link.id, inst_data)
             db.add(cad_inst)
 
+    # 更新 PartMaster.updated_at（写入 BOM / 上传 STP 不会直接改 PartMaster 行，
+    # 需要显式触发 onupdate 时间戳，供 CATIA 同步差异比较使用）
+    master.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(iteration)
     return iteration
