@@ -76,11 +76,11 @@ services:
       REDIS_URL: redis://redis:6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-in-prod-0123456789abcdef}
-      VAULT_PATH: /vault
+      VAULT_PATH: /uploads
       CONVERSIONS_PATH: /data/conversions
-      UPLOADS_PATH: /vault
+      UPLOADS_PATH: /uploads
     volumes:
-      - ${UPLOADS_HOST_PATH:-../plm_data/uploads}:/vault
+      - ${UPLOADS_HOST_PATH:-../plm_data/uploads}:/uploads
       - conversions_data:/data/conversions
     ports:
       - "8010:8000"  # 宿主机 8010，避免与 DocDoku 冲突
@@ -104,11 +104,11 @@ services:
       JAVA_OPTIONS: >-
         -Dquarkus.http.host=0.0.0.0
         -Djava.util.logging.manager=org.jboss.logmanager.LogManager
-        -DVAULT_PATH=/vault
+        -DVAULT_PATH=/uploads
         -DCONVERSIONS_PATH=/data/conversions
         -DENDPOINT=http://backend:8000/api
     volumes:
-      - ${UPLOADS_HOST_PATH:-../plm_data/uploads}:/vault
+      - ${UPLOADS_HOST_PATH:-../plm_data/uploads}:/uploads
       - conversions_data:/data/conversions
 
 volumes:
