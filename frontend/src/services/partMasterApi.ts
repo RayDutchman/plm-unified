@@ -36,12 +36,6 @@ export interface UsageLinkBrief {
 export interface PartMasterDetail extends PartMasterListItem {
   revisions: PartRevisionBrief[];
   usageLinks: UsageLinkBrief[];
-  nativeCad: {
-    fullName: string;
-    fileName: string;
-    contentLength: number;
-    lastModified: string | null;
-  } | null;
 }
 
 export const partMasterApi = {

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.binary import BinaryResource, Conversion, Geometry
 from app.models.part import PartIteration, PartMaster, PartRevision
+from app.models.pdm import PartAttachment
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +170,16 @@ async def save_native_cad_file(
         start_date=now,
     )
     db.add(conversion)
+
+    # 写入 part_attachments（CATIA 上传的 STP 应出现在前端 CAD附件 Tab）
+    db.add(PartAttachment(
+        id=uuid.uuid4(),
+        part_master_id=revision.part_master_id,
+        category="cad",
+        file_name=filename,
+        file_size=file_size,
+        file_path=full_name,
+    ))
 
     # 更新 PartMaster.updated_at（上传 STP 不直接修改 PartMaster 行）
     master = db.get(PartMaster, revision.part_master_id)

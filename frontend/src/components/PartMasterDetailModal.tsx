@@ -109,24 +109,6 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
                 <InfoItem label="标准件" value={viewing.standardPart ? '是' : '否'} />
                 <InfoItem label="签出人" value={viewing.checkoutUserId || '-'} />
               </div>
-              {viewing.nativeCad && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
-                  <span className="text-xs font-medium text-blue-700">原生CAD文件</span>
-                  <div className="text-sm text-blue-800 mt-1">
-                    {viewing.nativeCad.fileName}
-                    <span className="text-blue-500 ml-2">
-                      ({viewing.nativeCad.contentLength > 1024
-                        ? `${(viewing.nativeCad.contentLength / 1024).toFixed(0)} KB`
-                        : `${viewing.nativeCad.contentLength} B`})
-                    </span>
-                    {viewing.nativeCad.lastModified && (
-                      <span className="text-blue-400 ml-2">
-                        上传于 {new Date(viewing.nativeCad.lastModified).toLocaleDateString('zh-CN')}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
               {customDefs.length > 0 && (
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-bold text-gray-700 mb-2">自定义字段</h4>
