@@ -507,8 +507,8 @@ async def get_document_versions_endpoint(
 @router.get("/{doc_id}/logs")
 async def list_document_logs(
     doc_id: uuid.UUID,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(require_permission("documents:read")),
 ):

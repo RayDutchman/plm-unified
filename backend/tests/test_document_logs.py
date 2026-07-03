@@ -47,7 +47,6 @@ def client_with_logs(db):
     from app.models import Workspace, User, Document, UserGroup
     from app.core.security import get_password_hash
     from app.crud import create_log
-    from app.models.user_groups import user_group_members
 
     ws = Workspace(name="w")
     db.add(ws)
@@ -106,9 +105,9 @@ def test_list_document_logs_success(client_with_logs):
     assert actions == {"创建图文档", "上传附件"}
 
 
-def test_list_document_logs_forbidden_for_no_permission_role(client_with_logs):
+def test_list_document_logs_forbidden_for_unauthorized_role(client_with_logs):
     client, admin, viewer, doc, group_doc = client_with_logs
-    # user 角色默认无 documents:read，需确认权限表；若 user 角色实际拥有 documents:read，则改用其他角色。
+    # 使用未在权限表中授权的角色验证权限拦截
     r = client.post("/api/auth/token", data={"username": "viewer", "password": "viewer123"})
     assert r.status_code == 200, r.text
     token = r.json()["access_token"]
@@ -125,3 +124,22 @@ def test_list_document_logs_group_access_denied(client_with_logs):
     # viewer 不在 group_doc 的关联用户组中，应 403
     res = client.get(f"/api/documents/{group_doc.id}/logs", headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 403
+
+
+def test_list_document_logs_not_found(client_with_logs):
+    client, admin, viewer, doc, group_doc = client_with_logs
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    token = r.json()["access_token"]
+
+    res = client.get(f"/api/documents/{uuid.uuid4()}/logs", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 404
+
+
+def test_list_document_logs_empty(client_with_logs):
+    client, admin, viewer, doc, group_doc = client_with_logs
+    r = client.post("/api/auth/token", data={"username": "admin", "password": "admin12345"})
+    token = r.json()["access_token"]
+
+    res = client.get(f"/api/documents/{group_doc.id}/logs", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.json() == {"items": [], "total": 0}
