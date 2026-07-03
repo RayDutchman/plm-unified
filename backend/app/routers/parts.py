@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Optional
 
@@ -350,6 +351,24 @@ def _enrich_response(db: Session, master) -> PartResponse:
                 unit=link.unit,
             ))
         resp.usage_links = ulinks
+
+    # 原生 CAD 文件信息（取最新迭代的 native_cad_file_id）
+    from app.models.binary import BinaryResource
+    for rev in reversed(revisions):
+        for it in (rev.iterations or []):
+            if it.native_cad_file_id:
+                br = db.get(BinaryResource, it.native_cad_file_id)
+                if br:
+                    from app.schemas.part import NativeCadInfo
+                    resp.native_cad = NativeCadInfo(
+                        full_name=br.full_name,
+                        file_name=os.path.basename(br.full_name),
+                        content_length=br.content_length,
+                        last_modified=br.last_modified,
+                    )
+                break
+        if resp.native_cad:
+            break
 
     return resp
 

@@ -117,6 +117,16 @@ class PartResponse(_OrmBase):
     is_assembly: bool = False
     child_count: int = 0
     usage_links: list[UsageLinkBriefSchema] = []
+    native_cad: Optional[NativeCadInfo] = None
+
+
+class NativeCadInfo(BaseModel):
+    """原生 CAD 文件信息（DocDoku 对齐）。"""
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+    full_name: str
+    file_name: str
+    content_length: int
+    last_modified: Optional[datetime] = None
 
 
 class PartListItem(_OrmBase):
