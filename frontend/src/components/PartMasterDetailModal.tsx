@@ -38,7 +38,20 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
   const [tab, setTab] = useState<DetailTab>('basic');
   const [customDefs, setCustomDefs] = useState<CustomFieldDefinition[]>([]);
   const [customValues, setCustomValues] = useState<Record<string, unknown>>({});
+  const [selIterIdx, setSelIterIdx] = useState(0);  // 0 = latest (default)
   const navigate = useNavigate();
+
+  // 展开所有迭代列表（平坦化，最新排最前）
+  const allIterations = (viewing?.revisions || []).flatMap(r =>
+    r.iterations.map(it => ({ version: r.version, ...it }))
+  ).reverse();  // reverse so latest = index 0
+
+  const totalIters = allIterations.length;
+  const selectedIter = totalIters > 0 ? allIterations[selIterIdx] : null;
+
+  const selectIter = (delta: number) => {
+    setSelIterIdx(prev => Math.max(0, Math.min(totalIters - 1, prev + delta)));
+  };
   useEffect(() => {
     if (!identifier) { setViewing(null); return; }
     let cancelled = false;
@@ -80,6 +93,20 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
         <div className="py-8 text-center text-sm text-gray-400">加载失败</div>
       ) : (
         <div className="max-h-[70vh] overflow-y-auto pr-1">
+          {totalIters > 0 && (
+            <div className="flex items-center justify-center gap-3 mb-3 bg-gray-100 rounded-lg px-3 py-1.5">
+              <button onClick={() => selectIter(-1)} disabled={selIterIdx >= totalIters - 1}
+                className="text-gray-500 hover:text-gray-800 disabled:opacity-30 text-lg leading-none">◀</button>
+              <span className="text-sm font-medium text-gray-700">
+                {selectedIter?.version} #{selectedIter?.iteration}
+                <span className="text-gray-400 font-normal ml-1">
+                  ({selIterIdx + 1}/{totalIters})
+                </span>
+              </span>
+              <button onClick={() => selectIter(1)} disabled={selIterIdx <= 0}
+                className="text-gray-500 hover:text-gray-800 disabled:opacity-30 text-lg leading-none">▶</button>
+            </div>
+          )}
           <div className="flex gap-1 mb-4 border-b flex-wrap">
             <TabBtn active={tab === 'basic'} onClick={() => setTab('basic')}>基本信息</TabBtn>
             <TabBtn active={tab === 'docs'} onClick={() => setTab('docs')}>关联图文档</TabBtn>
@@ -130,11 +157,11 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
           )}
 
           {tab === 'cad' && (
-            <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false} />
+            <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false} selectedIterationId={selectedIter?.iteration ? String(selectedIter.iteration) : undefined} />
           )}
 
           {tab === 'production' && (
-            <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} />
+            <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} selectedIterationId={selectedIter?.iteration ? String(selectedIter.iteration) : undefined} />
           )}
 
           {tab === 'bom' && (

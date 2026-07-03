@@ -10,12 +10,13 @@ interface PartAttachmentBucketProps {
   label: string;
   editable?: boolean;
   hideWhenEmpty?: boolean;
+  selectedIterationId?: string;
 }
 
 const fmtSize = (n: number | null) =>
   n == null ? '-' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
 
-export default function PartAttachmentBucket({ partId, category, label, editable, hideWhenEmpty }: PartAttachmentBucketProps) {
+export default function PartAttachmentBucket({ partId, category, label, editable, hideWhenEmpty, selectedIterationId }: PartAttachmentBucketProps) {
   const [items, setItems] = useState<PartAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -131,10 +132,17 @@ export default function PartAttachmentBucket({ partId, category, label, editable
               // 按 iteration 分组
               const grouped = new Map<string | null, PartAttachment[]>();
               for (const a of items) {
+                // 如果有迭代筛选，只显示匹配的
+                if (selectedIterationId && String(a.iteration_number) !== selectedIterationId) continue;
                 const key = a.iteration_id || '__null__';
                 if (!grouped.has(key)) grouped.set(key, []);
                 grouped.get(key)!.push(a);
               }
+              if (grouped.size === 0) return (
+                <div className="px-4 py-6 text-center text-sm text-gray-400">
+                  {selectedIterationId ? '当前迭代无附件' : '暂无附件'}
+                </div>
+              );
               return Array.from(grouped.entries()).map(([key, atts]) => {
                 const first = atts[0];
                 const iterLabel = first.iteration_number
