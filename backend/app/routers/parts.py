@@ -171,6 +171,28 @@ def update_part_endpoint(
     return _enrich_response(db, master)
 
 
+@router.delete("/{identifier}", summary="删除零件（软删除）")
+def delete_part_endpoint(
+    identifier: str,
+    workspace_id: uuid.UUID = Query(..., description="工作空间 ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    from datetime import datetime, timezone
+
+    uid = uuid.UUID(identifier)
+    master = db.query(PartMaster).filter(
+        PartMaster.id == uid,
+        PartMaster.workspace_id == workspace_id,
+        PartMaster.deleted_at.is_(None),
+    ).first()
+    if not master:
+        raise HTTPException(status_code=404, detail="零件不存在")
+    master.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"detail": "已删除"}
+
+
 # ---------------------------------------------------------------------------
 # 1.7 签入签出端点
 # ---------------------------------------------------------------------------
