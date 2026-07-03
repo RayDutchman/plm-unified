@@ -1,5 +1,4 @@
 """图文档操作记录相关测试。"""
-import pytest
 from app.crud import get_logs
 from app.models import OperationLog
 
@@ -26,3 +25,11 @@ def test_get_logs_supports_multiple_target_types(db):
     assert total == 2
     actions = {log.action for log in items}
     assert actions == {"创建图文档", "上传附件"}
+
+    # 旧参数类型兼容性断言
+    items, total = get_logs(db, target_type="document", target_id="doc-1")
+    assert total == 1
+    assert items[0].action == "创建图文档"
+
+    items, total = get_logs(db, target_id="doc-1")
+    assert total == 2
