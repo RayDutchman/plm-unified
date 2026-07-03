@@ -44,7 +44,10 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
   // 展开所有迭代列表（平坦化，最新排最前）
   const allIterations = (viewing?.revisions || []).flatMap(r =>
     r.iterations.map(it => ({ version: r.version, ...it }))
-  ).reverse();  // reverse so latest = index 0
+  ).reverse();
+
+  // 看是否只有一个版本，是的话不显示版本号
+  const singleVersion = new Set(allIterations.map(it => it.version)).size <= 1;
 
   const totalIters = allIterations.length;
   const selectedIter = totalIters > 0 ? allIterations[selIterIdx] : null;
@@ -98,7 +101,7 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
               <button onClick={() => selectIter(-1)} disabled={selIterIdx >= totalIters - 1}
                 className="text-gray-500 hover:text-gray-800 disabled:opacity-30 text-lg leading-none">◀</button>
               <span className="text-sm font-medium text-gray-700">
-                {selectedIter?.version} #{selectedIter?.iteration}
+                #{selectedIter?.iteration}
                 <span className="text-gray-400 font-normal ml-1">
                   ({selIterIdx + 1}/{totalIters})
                 </span>
@@ -157,11 +160,11 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
           )}
 
           {tab === 'cad' && (
-            <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false} selectedIterationId={selectedIter?.iteration ? String(selectedIter.iteration) : undefined} />
+            <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false} />
           )}
 
           {tab === 'production' && (
-            <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} selectedIterationId={selectedIter?.iteration ? String(selectedIter.iteration) : undefined} />
+            <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} />
           )}
 
           {tab === 'bom' && (
