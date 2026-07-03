@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { partAttachmentsApi, mediaApi, v2UploadApi, CHUNK_THRESHOLD, CHUNK_SIZE } from '../services/api';
 import type { PartAttachment } from '../services/api';
 import { previewAttachment } from '../utils/attachmentPreview';
@@ -10,12 +10,14 @@ interface PartAttachmentBucketProps {
   label: string;
   editable?: boolean;
   hideWhenEmpty?: boolean;
+  /** 指定迭代筛选项——不传则显示全部 */
+  selectedIterationNumber?: number;
 }
 
 const fmtSize = (n: number | null) =>
   n == null ? '-' : n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
 
-export default function PartAttachmentBucket({ partId, category, label, editable, hideWhenEmpty }: PartAttachmentBucketProps) {
+export default function PartAttachmentBucket({ partId, category, label, editable, hideWhenEmpty, selectedIterationNumber }: PartAttachmentBucketProps) {
   const [items, setItems] = useState<PartAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -38,6 +40,12 @@ export default function PartAttachmentBucket({ partId, category, label, editable
   }, [partId, category]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 按迭代筛选
+  const displayItems = useMemo(() => {
+    if (selectedIterationNumber == null) return items;
+    return items.filter(a => a.iteration_number === selectedIterationNumber);
+  }, [items, selectedIterationNumber]);
 
   const uploadLarge = async (file: File) => {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -94,7 +102,7 @@ export default function PartAttachmentBucket({ partId, category, label, editable
     } catch { alert('下载失败，请重试'); }
   };
 
-  if (hideWhenEmpty && !loading && !uploading && items.length === 0) return null;
+  if (hideWhenEmpty && !loading && !uploading && displayItems.length === 0) return null;
 
   return (
     <div className="border-t pt-4">
@@ -123,14 +131,13 @@ export default function PartAttachmentBucket({ partId, category, label, editable
       <div className="border rounded-lg overflow-hidden">
         {loading ? (
           <div className="px-4 py-6 text-center text-sm text-gray-400">加载中...</div>
-        ) : items.length === 0 && !uploading ? (
+        ) : displayItems.length === 0 && !uploading ? (
           <div className="px-4 py-6 text-center text-sm text-gray-400">暂无附件</div>
         ) : (
           <div>
             {(() => {
-              // 按 iteration 分组
               const grouped = new Map<string | null, PartAttachment[]>();
-              for (const a of items) {
+              for (const a of displayItems) {
                 const key = a.iteration_id || '__null__';
                 if (!grouped.has(key)) grouped.set(key, []);
                 grouped.get(key)!.push(a);

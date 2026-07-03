@@ -60,6 +60,7 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
     let cancelled = false;
     setViewing(null);
     setLoading(true);
+    setSelIterIdx(0);
     setTab('basic');
     setCustomValues({});
     (async () => {
@@ -101,10 +102,7 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
               <button onClick={() => selectIter(-1)} disabled={selIterIdx >= totalIters - 1}
                 className="text-gray-500 hover:text-gray-800 disabled:opacity-30 text-lg leading-none">◀</button>
               <span className="text-sm font-medium text-gray-700">
-                #{selectedIter?.iteration}
-                <span className="text-gray-400 font-normal ml-1">
-                  ({selIterIdx + 1}/{totalIters})
-                </span>
+                {selIterIdx + 1}/{totalIters}
               </span>
               <button onClick={() => selectIter(1)} disabled={selIterIdx <= 0}
                 className="text-gray-500 hover:text-gray-800 disabled:opacity-30 text-lg leading-none">▶</button>
@@ -160,11 +158,13 @@ export default function PartMasterDetailModal({ identifier, onClose }: Props) {
           )}
 
           {tab === 'cad' && (
-            <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false} />
+            <PartAttachmentBucket partId={viewing.id} category="cad" label="CAD附件" editable={false}
+              selectedIterationNumber={selectedIter?.iteration} />
           )}
 
           {tab === 'production' && (
-            <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false} />
+            <PartAttachmentBucket partId={viewing.id} category="production" label="生产附件" editable={false}
+              selectedIterationNumber={selectedIter?.iteration} />
           )}
 
           {tab === 'bom' && (
