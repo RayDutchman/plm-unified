@@ -189,23 +189,62 @@ def checkout(
     """
     签出零件版本（对齐 DocDoku：checkout 时创建新迭代）。
     规则：
-       - status 必须为 WIP
+       - status == WIP → 冻结当前迭代 → 创建下一迭代
+       - status == RELEASED / OBSOLETE → 创建新版本（A→B），新版本 WIP + iter=1
        - checkout_user_id 必须为 NULL
-       - 冻结当前迭代 → 创建下一迭代（新迭代可上传/修改）
     并发保护：SELECT FOR UPDATE
     """
     revision = _get_revision_for_update(db, number, version, workspace_id)
 
-    if revision.status != "WIP":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"版本 {version!r} 状态为 {revision.status}，不可签出（仅 WIP 可签出）",
-        )
     if revision.checkout_user_id is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"版本 {version!r} 已被用户 {revision.checkout_user_id} 签出",
         )
+
+    now = _utcnow()
+
+    # RELEASED / OBSOLETE → 创建新版本
+    if revision.status != "WIP":
+        from app.crud.eco import _next_version_str
+        next_ver = _next_version_str(version)
+        existing = (
+            db.query(PartRevision)
+            .filter(
+                PartRevision.part_master_id == revision.part_master_id,
+                PartRevision.version == next_ver,
+            )
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"下一版本 {next_ver!r} 已存在，请签入当前版本后再创建新版本",
+            )
+        new_rev = PartRevision(
+            id=uuid.uuid4(),
+            part_master_id=revision.part_master_id,
+            version=next_ver,
+            status="WIP",
+            checkout_user_id=current_user_id,
+            checkout_date=now,
+        )
+        db.add(new_rev)
+        db.flush()
+        # 新版本创建第一个迭代
+        db.add(PartIteration(
+            id=uuid.uuid4(),
+            part_revision_id=new_rev.id,
+            iteration=1,
+            author_id=current_user_id,
+            check_in_date=None,
+        ))
+        db.flush()
+        db.commit()
+        db.refresh(new_rev)
+        return new_rev
+
+    # WIP → 在当前版本内创建下一个迭代
 
     now = _utcnow()
 
