@@ -5,12 +5,20 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("JWT_SECRET", "test-secret-key-for-tests-only-xx")
 
 import pytest
-from sqlalchemy import create_engine, event
+from sqlalchemy import JSON, create_engine, event
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
 import app.models  # noqa: F401  触发全部模型注册到 Base.metadata
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(element, compiler, **kw):
+    """测试环境下将 PostgreSQL JSONB 映射为 SQLite 可识别的 JSON 类型。"""
+    return compiler.process(JSON())
 
 
 @pytest.fixture
