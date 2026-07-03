@@ -187,11 +187,10 @@ def checkout(
     current_user_id: uuid.UUID,
 ) -> PartRevision:
     """
-    签出零件版本（对齐 DocDoku：checkout 时创建新迭代）。
+    签出零件版本。
     规则：
-       - status 必须为 WIP
-       - checkout_user_id 必须为 NULL
-       - 冻结当前迭代 → 创建下一迭代（新迭代可上传/修改）
+      - status 必须为 WIP（已发布/废弃版本不可签出）
+      - checkout_user_id 必须为 NULL（未被任何人签出）
     并发保护：SELECT FOR UPDATE
     """
     revision = _get_revision_for_update(db, number, version, workspace_id)
@@ -207,32 +206,8 @@ def checkout(
             detail=f"版本 {version!r} 已被用户 {revision.checkout_user_id} 签出",
         )
 
-    now = _utcnow()
-
-    # 冻结当前迭代（若存在且未冻结）
-    latest = _latest_iteration(db, revision.id)
-    if latest and latest.check_in_date is None:
-        latest.check_in_date = now
-        db.flush()
-
-    # 创建新迭代（DocDoku：checkout 时创建，upload/update 写入此迭代）
-    max_iter = (
-        db.query(func.max(PartIteration.iteration))
-        .filter(PartIteration.part_revision_id == revision.id)
-        .scalar()
-    ) or 0
-    new_iter = PartIteration(
-        id=uuid.uuid4(),
-        part_revision_id=revision.id,
-        iteration=max_iter + 1,
-        author_id=current_user_id,
-        check_in_date=None,
-    )
-    db.add(new_iter)
-    db.flush()
-
     revision.checkout_user_id = current_user_id
-    revision.checkout_date = now
+    revision.checkout_date = _utcnow()
     db.commit()
     db.refresh(revision)
     return revision
@@ -247,14 +222,13 @@ def checkin(
     iteration_note: str | None = None,
 ) -> PartRevision:
     """
-    签入零件版本（对齐 DocDoku：checkin 时冻结当前迭代，不创建新迭代）：
-       1. 冻结当前最新迭代（写 check_in_date）
-       2. 清签出锁
-       3. 状态升为 RELEASED
-     规则：
-       - 必须已签出（checkout_user_id IS NOT NULL）
-       - 必须是签出本人
-    注意：新迭代在 checkout 时已创建；checkin 只冻结。
+    签入零件版本：
+      1. 冻结当前最新迭代（写 check_in_date）
+      2. 生成下一迭代号（max+1，并发安全）
+      3. 清签出锁
+    规则：
+      - 必须已签出（checkout_user_id IS NOT NULL）
+      - 必须是签出本人
     """
     revision = _get_revision_for_update(db, number, version, workspace_id)
 
@@ -271,9 +245,10 @@ def checkin(
 
     now = _utcnow()
 
-    # 冻结当前草稿迭代
+    # 冻结当前草稿迭代（正常情况下必然存在，否则数据不一致）
     latest = _latest_iteration(db, revision.id)
     if latest is None:
+        # 防御性检查：版本无任何迭代，属于数据异常，回滚并报 500
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"版本 {version!r} 无任何迭代记录，数据异常",
@@ -284,10 +259,24 @@ def checkin(
             latest.iteration_note = iteration_note
         db.flush()
 
+    # 生成下一迭代（max+1，并发安全）
+    max_iter = (
+        db.query(func.max(PartIteration.iteration))
+        .filter(PartIteration.part_revision_id == revision.id)
+        .scalar()
+    ) or 0
+    new_iter = PartIteration(
+        id=uuid.uuid4(),
+        part_revision_id=revision.id,
+        iteration=max_iter + 1,
+        author_id=current_user_id,
+        check_in_date=None,
+    )
+    db.add(new_iter)
+
     # 清签出锁
     revision.checkout_user_id = None
     revision.checkout_date = None
-    revision.status = "RELEASED"
     db.commit()
     db.refresh(revision)
     return revision
@@ -301,12 +290,10 @@ def undocheckout(
     current_user_id: uuid.UUID,
 ) -> PartRevision:
     """
-    撤销签出：删除 checkout 时创建的新迭代，清签出锁。
+    撤销签出：丢弃未签入的草稿迭代（若存在且 iteration > 1），清签出锁。
     规则：
-       - 必须已签出
-       - 必须是签出本人
-       - 新迭代（check_in_date IS NULL 且 iteration > 1）会被删除，
-         原迭代的 check_in_date 恢复为 NULL（解冻）
+      - 必须已签出
+      - 必须是签出本人
     """
     revision = _get_revision_for_update(db, number, version, workspace_id)
 
@@ -321,16 +308,10 @@ def undocheckout(
             detail=f"版本 {version!r} 由其他用户签出，无法撤销",
         )
 
-    # 删除 checkout 时创建的新迭代（check_in_date IS NULL 且 iteration > 1）
+    # 删除草稿迭代（check_in_date IS NULL 且 iteration > 1）
     latest = _latest_iteration(db, revision.id)
     if latest and latest.check_in_date is None and latest.iteration > 1:
         db.delete(latest)
-        db.flush()
-
-    # 解冻原迭代
-    prev = _latest_iteration(db, revision.id)  # 删掉新迭代后，latest 就是原迭代
-    if prev and prev.check_in_date is not None:
-        prev.check_in_date = None
         db.flush()
 
     # 清签出锁
