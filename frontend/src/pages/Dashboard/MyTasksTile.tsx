@@ -43,7 +43,6 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
       }
       map.get(t.project_id)!.tasks.push(t);
     }
-    // 每组内按计划开始日期升序排列
     for (const [, g] of map) {
       g.tasks.sort((a, b) => {
         if (!a.planned_start) return 1;
@@ -69,35 +68,29 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
             <div key={g.project.id} className="rounded-lg border border-gray-100 bg-gray-50">
               <Link
                 to={`/projects?project_id=${g.project.id}`}
-                className="block px-3 py-2 border-b border-gray-200 text-xs font-medium text-gray-500 hover:text-blue-600"
+                className="block px-3 py-1.5 border-b border-gray-200 text-xs font-medium text-gray-500 hover:text-blue-600"
               >
                 {g.project.code} · {g.project.name}
-                <span className="text-gray-400 ml-2">({g.tasks.length})</span>
+                <span className="text-gray-400 ml-1">({g.tasks.length})</span>
               </Link>
               {g.tasks.map((t) => {
                 const od = overdueDays(t.planned_end, now);
                 const startStr = fmtDate(t.planned_start);
                 const endStr = fmtDate(t.planned_end);
-                const dateRange = startStr || endStr ? `${startStr || '...'} ~ ${endStr || '...'}` : null;
                 return (
                   <Link
                     key={t.task_id}
                     to={`/projects?project_id=${t.project_id}&task_id=${t.task_id}`}
-                    className={`block px-3 py-2 hover:bg-gray-100 transition-colors ${od > 0 ? 'bg-red-50/50' : ''}`}
+                    className={`block px-3 py-1.5 hover:bg-gray-100 transition-colors ${od > 0 ? 'bg-red-50/50' : ''}`}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${od > 0 ? 'bg-red-500' : 'bg-gray-400'}`} />
-                      <span className="text-sm text-gray-800 truncate flex-1">{t.name}</span>
-                      <span className={`text-xs px-1 rounded shrink-0 ${STATUS_CLS[t.status] || 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
-                      {dateRange && (
-                        <span className={`text-xs shrink-0 ${od > 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                          {dateRange}
-                        </span>
-                      )}
+                    <div className="flex items-center gap-2 text-xs min-w-0">
+                      <span className="text-gray-500 shrink-0 w-12 truncate" title={t.code}>{t.code}</span>
+                      <span className={`truncate flex-1 min-w-0 ${od > 0 ? 'text-red-700' : 'text-gray-800'}`} title={t.name}>{t.name}</span>
+                      <span className="text-gray-400 truncate max-w-[160px]" title={t.description || ''}>{t.description || ''}</span>
+                      <span className={`px-1 rounded shrink-0 ${STATUS_CLS[t.status] || 'bg-gray-100 text-gray-600'}`}>{t.status}</span>
+                      <span className="text-gray-400 shrink-0">{startStr}</span>
+                      <span className="text-gray-400 shrink-0">{endStr}</span>
                     </div>
-                    {t.description && (
-                      <div className="text-xs text-gray-400 mt-0.5 ml-3.5 truncate">{t.description}</div>
-                    )}
                   </Link>
                 );
               })}
