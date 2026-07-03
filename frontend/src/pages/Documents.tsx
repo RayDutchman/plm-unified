@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { documentsApi, customFieldsApi, bomApi, v2UploadApi, CHUNK_SIZE, CHUNK_THRESHOLD, userGroupsApi } from '../services/api';
-import type { Document, CustomFieldDefinition, CustomFieldValue, DocumentAttachment } from '../types';
+import type { Document, CustomFieldDefinition, CustomFieldValue, DocumentAttachment, OperationLog } from '../types';
 import { canEdit, isAdmin, canDownload, useAuthStore } from '../stores/auth';
 import { Modal, ConfirmModal } from '../components/Modal';
 import DocumentDetailContent from '../components/DocumentDetailContent';
 import VersionHistory from '../components/VersionHistory';
+import OperationLogTable from '../components/OperationLogTable';
 import { useDataStore } from '../stores/data';
 import { useTableSort } from '../hooks/useTableSort';
 import {
@@ -92,8 +93,24 @@ export default function Documents() {
   const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
   const [viewingCustomDefs, setViewingCustomDefs] = useState<CustomFieldDefinition[]>([]);
   const [viewingCustomValues, setViewingCustomValues] = useState<Record<string, any>>({});
-  const [detailTab, setDetailTab] = useState<'detail' | 'versions'>('detail');
+  const [detailTab, setDetailTab] = useState<'detail' | 'versions' | 'logs'>('detail');
   const [archivePreview, setArchivePreview] = useState<{ attId: string; fileName: string } | null>(null);
+
+  const [docLogs, setDocLogs] = useState<OperationLog[]>([]);
+  const [docLogsLoading, setDocLogsLoading] = useState(false);
+
+  const loadDocLogs = async (docId: string) => {
+    setDocLogsLoading(true);
+    try {
+      const r = await documentsApi.getLogs(docId);
+      setDocLogs((r.data as any).items ?? []);
+    } catch (err) {
+      console.error('加载图文档操作记录失败', err);
+      setDocLogs([]);
+    } finally {
+      setDocLogsLoading(false);
+    }
+  };
 
   // 从 store 订阅数据
   const storeDocuments = useDataStore((s) => s.documents);
@@ -133,6 +150,12 @@ export default function Documents() {
   useEffect(() => {
     loadDocuments();
   }, [search, status, storeDocuments]);
+
+  useEffect(() => {
+    if (detailTab === 'logs' && viewingDoc?.id) {
+      loadDocLogs(viewingDoc.id);
+    }
+  }, [detailTab, viewingDoc?.id]);
 
   const { sortedData, handleSort, getSortIcon } = useTableSort<Document>(documents, 'code', 'asc');
 
@@ -1083,9 +1106,19 @@ export default function Documents() {
               >
                 版本历史
               </button>
+              <button
+                onClick={() => setDetailTab('logs')}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  detailTab === 'logs'
+                    ? 'border-primary-600 text-primary-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                操作记录
+              </button>
             </div>
 
-            {detailTab === 'detail' ? (
+            {detailTab === 'detail' && (
               <DocumentDetailContent
                 doc={viewingDoc}
                 customFieldDefs={viewingCustomDefs}
@@ -1094,7 +1127,8 @@ export default function Documents() {
                 groupNames={((viewingDoc as any).group_ids || []).map((gid: string) => allGroups.find(g => g.id === gid)?.name || gid).filter(Boolean)}
                 onArchivePreview={(attId, fileName) => setArchivePreview({ attId, fileName })}
               />
-            ) : (
+            )}
+            {detailTab === 'versions' && (
               <VersionHistory
                 entityType="document"
                 entityId={viewingDoc.id}
@@ -1107,6 +1141,9 @@ export default function Documents() {
                   }
                 }}
               />
+            )}
+            {detailTab === 'logs' && (
+              <OperationLogTable logs={docLogs} loading={docLogsLoading} />
             )}
           </div>
         )}
