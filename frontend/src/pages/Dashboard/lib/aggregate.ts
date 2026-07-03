@@ -48,3 +48,61 @@ export function overdueDays(plannedEnd: string | null, nowMs: number): number {
   const diff = Math.floor((nowMs - t) / 86400000);
   return diff > 0 ? diff : 0;
 }
+
+const ENTITY_TYPES = new Set(['part', 'assembly', 'document', 'configuration']);
+const ENTITY_LABEL: Record<string, string> = { part: '零件', assembly: '部件', document: '图文档', configuration: '构型项' };
+const ACTION_LABEL: Record<string, string> = { create: '创建了', update: '更新了', delete: '删除了', login: '登录', review: '审批了' };
+
+export interface RecentRef { targetType: string; targetId: string; at: string; }
+
+export function dedupeRecentRefs(
+  logs: { target_type: string; target_id: string; created_at: string }[],
+  limit: number,
+): RecentRef[] {
+  const seen = new Set<string>();
+  const out: RecentRef[] = [];
+  for (const l of logs) {
+    if (!ENTITY_TYPES.has(l.target_type)) continue;
+    const key = `${l.target_type}:${l.target_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ targetType: l.target_type, targetId: l.target_id, at: l.created_at });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export interface FavItem { id: string; entity_type: string; entity_id: string; code: string; name: string; }
+
+export function flattenFavorites(resp: any, limit: number): FavItem[] {
+  const out: FavItem[] = [];
+  const walk = (folders: any[]) => {
+    for (const f of folders || []) {
+      for (const it of f.items || []) {
+        out.push(it);
+        if (out.length >= limit) return;
+      }
+      walk(f.children || []);
+      if (out.length >= limit) return;
+    }
+  };
+  walk(resp?.folders || []);
+  return out.slice(0, limit);
+}
+
+export interface Activity { initial: string; text: string; time: string; targetType: string; targetId: string; }
+
+export function formatActivity(
+  log: { username: string; action: string; target_type: string; target_id: string; created_at: string },
+  nowMs: number,
+): Activity {
+  const action = ACTION_LABEL[log.action] || log.action;
+  const label = ENTITY_LABEL[log.target_type] || log.target_type;
+  return {
+    initial: (log.username || '?').charAt(0),
+    text: `${log.username} ${action}${label}`,
+    time: relativeTime(log.created_at, nowMs),
+    targetType: log.target_type,
+    targetId: log.target_id,
+  };
+}
