@@ -123,6 +123,8 @@ def get_custom_field_values_batch(db: Session, entity_type, entity_ids):
 
 
 def set_custom_field_values(db: Session, entity_type, entity_id, values):
+    """批量设置自定义字段值，返回实际发生变更的字段数量。"""
+    changed_count = 0
     for item in values:
         field_def = get_custom_field_definition(db, item.field_id)
         if not field_def:
@@ -149,11 +151,19 @@ def set_custom_field_values(db: Session, entity_type, entity_id, values):
             value_json = item.value if isinstance(item.value, list) else None
 
         if existing:
-            existing.value_text = value_text
-            existing.value_number = value_number
-            existing.value_json = value_json
-            existing.updated_at = datetime.utcnow()
+            # 只有当值真正变化时才更新，并计入变更数
+            if (existing.value_text != value_text or
+                existing.value_number != value_number or
+                existing.value_json != value_json):
+                existing.value_text = value_text
+                existing.value_number = value_number
+                existing.value_json = value_json
+                existing.updated_at = datetime.utcnow()
+                changed_count += 1
         else:
+            # 原无值且新值也为空，不创建记录
+            if value_text is None and value_number is None and value_json is None:
+                continue
             new_val = CustomFieldValue(
                 field_id=item.field_id,
                 entity_type=entity_type,
@@ -165,8 +175,9 @@ def set_custom_field_values(db: Session, entity_type, entity_id, values):
             if item.id:
                 new_val.id = item.id
             db.add(new_val)
+            changed_count += 1
     db.commit()
-    return True
+    return changed_count
 
 
 def assert_entity_editable(db: Session, entity_type: str, entity_id, user_role: str):
