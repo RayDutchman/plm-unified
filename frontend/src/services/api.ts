@@ -155,6 +155,7 @@ export const documentsApi = {
   delete: (id: string) => api.delete(`/documents/${id}`),
   upgrade: (id: string, note?: string) => api.post(`/documents/${id}/upgrade`, { note }),
   versions: (id: string) => api.get(`/documents/${id}/versions`),
+  getLogs: (id: string) => api.get(`/documents/${id}/logs`),
   // 图文档附件
   uploadAttachment: (docId: string, data: { id?: string; file_name: string; file_data: string }) =>
     api.post(`/documents/${docId}/attachments`, data),
