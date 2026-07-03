@@ -59,7 +59,7 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
     <Tile
       title="我的任务"
       icon={<span>✅</span>}
-      right={overdueTotal > 0 ? <span className="text-xs text-red-500">{overdueTotal} 逾期</span> : undefined}
+      right={overdueTotal > 0 ? <span className="text-sm text-red-500">{overdueTotal} 逾期</span> : undefined}
       className="min-h-[220px]"
     >
       {loaded && items.length === 0 ? <EmptyState text="暂无指派给你的任务" /> : (
@@ -68,7 +68,7 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
             <div key={g.project.id} className="rounded-lg border border-gray-100 bg-gray-50">
               <Link
                 to={`/projects?project_id=${g.project.id}`}
-                className="block px-3 py-1.5 border-b border-gray-200 text-xs font-medium text-gray-500 hover:text-blue-600"
+                className="block px-3 py-1.5 border-b border-gray-200 text-sm font-medium text-gray-500 hover:text-blue-600"
               >
                 {g.project.code} · {g.project.name}
                 <span className="text-gray-400 ml-1">({g.tasks.length})</span>
@@ -83,7 +83,7 @@ export function MyTasksTile({ onOverdue }: { onOverdue?: (n: number) => void }) 
                     to={`/projects?project_id=${t.project_id}&task_id=${t.task_id}`}
                     className={`block px-3 py-1.5 hover:bg-gray-100 transition-colors ${od > 0 ? 'bg-red-50/50' : ''}`}
                   >
-                    <div className="flex items-center gap-2 text-xs min-w-0">
+                    <div className="flex items-center gap-2 text-sm min-w-0">
                       <span className="text-gray-500 shrink-0" title={t.code}>{t.code}</span>
                       <span className={`shrink-0 ${od > 0 ? 'text-red-700' : 'text-gray-800'}`} title={t.name}>{t.name}</span>
                       <span className="text-gray-400 truncate flex-1 min-w-0" title={t.description || ''}>{t.description || ''}</span>

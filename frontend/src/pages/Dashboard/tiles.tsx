@@ -14,7 +14,7 @@ export function Tile({ title, icon, right, children, className = '' }: {
     <div className={`bg-white rounded-xl border border-gray-200 p-4 flex flex-col ${className}`}>
       <div className="flex items-center gap-2 mb-3">
         {icon && <span className="text-gray-400">{icon}</span>}
-        <h3 className="text-sm font-medium text-gray-800">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
         {right && <span className="ml-auto">{right}</span>}
       </div>
       {children}
@@ -23,15 +23,15 @@ export function Tile({ title, icon, right, children, className = '' }: {
 }
 
 export function EmptyState({ text }: { text: string }) {
-  return <div className="flex-1 flex items-center justify-center text-xs text-gray-400 py-4">{text}</div>;
+  return <div className="flex-1 flex items-center justify-center text-sm text-gray-400 py-4">{text}</div>;
 }
 
 export function GreetingHeader({ name, todoCount, overdueCount }: { name: string; todoCount: number; overdueCount: number }) {
   const hour = new Date().getHours();
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-base font-medium text-gray-900">{greeting(hour)}，{name || '同事'}</span>
-      <span className="text-xs text-gray-400">· 你有 {todoCount} 项待处理{overdueCount > 0 ? `、${overdueCount} 个任务逾期` : ''}</span>
+      <span className="text-lg font-medium text-gray-900">{greeting(hour)}，{name || '同事'}</span>
+      <span className="text-sm text-gray-400">· 你有 {todoCount} 项待处理{overdueCount > 0 ? `、${overdueCount} 个任务逾期` : ''}</span>
     </div>
   );
 }
@@ -50,7 +50,7 @@ export function KpiStrip({ partsMasters, documents, configItems, changeOpen }: {
       {items.map((it) => (
         <Link key={it.label} to={it.to} className="bg-gray-50 rounded-xl p-3 flex flex-col items-center hover:bg-gray-100 transition-colors">
           <span className={`text-xl font-medium ${it.cls}`}>{it.value}</span>
-          <span className="text-xs text-gray-500 mt-1">{it.label}</span>
+          <span className="text-sm text-gray-500 mt-1">{it.label}</span>
         </Link>
       ))}
     </div>
@@ -64,7 +64,7 @@ function DistRow({ label, dist }: { label: string; dist: Distribution }) {
   const keys: ('draft' | 'frozen' | 'released' | 'obsolete')[] = ['draft', 'frozen', 'released', 'obsolete'];
   return (
     <div>
-      <div className="text-xs text-gray-500 mb-1">{label} · {dist.total}</div>
+      <div className="text-sm text-gray-500 mb-1">{label} · {dist.total}</div>
       <div className="flex h-3 rounded overflow-hidden bg-gray-100">
         {dist.total > 0 && keys.map((k) => dist.pct[k] > 0 && (
           <div key={k} style={{ width: `${dist.pct[k]}%`, background: SEG_COLOR[k] }} title={`${SEG_LABEL[k]} ${dist[k]}`} />
@@ -90,9 +90,9 @@ export function StatusDistributionTile({ partsMasters, documents, configItems }:
         <div className="flex flex-col gap-3 flex-1">
           {rows.map((r) => <DistRow key={r.label} label={r.label} dist={r.dist} />)}
           {configItems.length > 0 && (
-            <div className="text-xs text-gray-500">构型项 · {configItems.length}</div>
+            <div className="text-sm text-gray-500">构型项 · {configItems.length}</div>
           )}
-          <div className="flex gap-3 flex-wrap text-xs text-gray-500 mt-auto pt-1">
+          <div className="flex gap-3 flex-wrap text-sm text-gray-500 mt-auto pt-1">
             {(['draft', 'frozen', 'released', 'obsolete'] as const).map((k) => (
               <span key={k} className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-sm inline-block" style={{ background: SEG_COLOR[k] }} />{SEG_LABEL[k]}
@@ -111,7 +111,7 @@ export function RecentItemsTile({ items }: { items: RecentDisplay[] }) {
       {items.length === 0 ? <EmptyState text="最近没有编辑记录" /> : (
         <div className="flex flex-col gap-2">
           {items.map((it) => (
-            <Link key={it.key} to={ENTITY_ROUTE[it.entityType] || '/'} className="flex items-center gap-2 text-xs text-gray-700 hover:text-blue-600 truncate">
+            <Link key={it.key} to={ENTITY_ROUTE[it.entityType] || '/'} className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 truncate">
               <span>{ENTITY_ICON[it.entityType]}</span>
               <span className="text-gray-400">{it.code}</span>
               <span className="truncate">{it.name}</span>
@@ -129,7 +129,7 @@ export function FavoritesTile({ items }: { items: FavItem[] }) {
       {items.length === 0 ? <EmptyState text="还没有收藏，去看板添加" /> : (
         <div className="flex flex-col gap-2">
           {items.map((it) => (
-            <Link key={it.id} to={ENTITY_ROUTE[it.entity_type] || '/'} className="flex items-center gap-2 text-xs text-gray-700 hover:text-blue-600 truncate">
+            <Link key={it.id} to={ENTITY_ROUTE[it.entity_type] || '/'} className="flex items-center gap-2 text-sm text-gray-700 hover:text-blue-600 truncate">
               <span>{ENTITY_ICON[it.entity_type]}</span>
               <span className="text-gray-400">{it.code}</span>
               <span className="truncate">{it.name}</span>
@@ -148,9 +148,9 @@ export function ActivityFeedTile({ items }: { items: Activity[] }) {
         <div className="flex flex-col gap-3">
           {items.map((a, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-xs flex items-center justify-center shrink-0">{a.initial}</span>
-              <span className="flex-1 text-xs text-gray-700 truncate">{a.text}</span>
-              <span className="text-xs text-gray-400 shrink-0">{a.time}</span>
+              <span className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 text-sm flex items-center justify-center shrink-0">{a.initial}</span>
+              <span className="flex-1 text-sm text-gray-700 truncate">{a.text}</span>
+              <span className="text-sm text-gray-400 shrink-0">{a.time}</span>
             </div>
           ))}
         </div>
