@@ -43,7 +43,7 @@ def _norm_value(v):
     return str(v)
 
 
-def _format_doc_field_change(field: str, old_val, new_val) -> str | None:
+def _format_doc_field_change(field: str, old_val, new_val, db: Session = None) -> str | None:
     """格式化图文档单字段变更详情。"""
     label = _DOCUMENT_FIELD_LABELS.get(field, field)
     if field == "group_ids":
@@ -55,9 +55,11 @@ def _format_doc_field_change(field: str, old_val, new_val) -> str | None:
         removed = old_set - new_set
         parts = []
         if added:
-            parts.append(f"增加 {len(added)} 个")
+            names = _resolve_group_names(db, added) if db else sorted(added)
+            parts.append(f"增加 {', '.join(names)}")
         if removed:
-            parts.append(f"移除 {len(removed)} 个")
+            names = _resolve_group_names(db, removed) if db else sorted(removed)
+            parts.append(f"移除 {', '.join(names)}")
         return f"{label}：{', '.join(parts)}"
     if _norm_value(old_val) == _norm_value(new_val):
         return None
@@ -78,9 +80,10 @@ def _format_file_size(bytes_size: int | None) -> str:
 def _resolve_group_names(db: Session, gids: set) -> list:
     if not gids:
         return []
-    gs = db.query(UserGroup).filter(UserGroup.id.in_(gids)).all()
+    uuid_gids = {uuid.UUID(g) if isinstance(g, str) else g for g in gids}
+    gs = db.query(UserGroup).filter(UserGroup.id.in_(uuid_gids)).all()
     gname_map = {g.id: g.name for g in gs}
-    return [gname_map.get(gid, str(gid)) for gid in gids]
+    return [gname_map.get(gid, str(gid)) for gid in uuid_gids]
 
 
 def _check_accessible(user, doc, user_group_ids: set, doc_groups: set) -> bool:
@@ -327,11 +330,11 @@ async def update_document(
     for field, value in update_data.items():
         if field == "status":
             continue
-        part = _format_doc_field_change(field, old_vals.get(field), value)
+        part = _format_doc_field_change(field, old_vals.get(field), value, db)
         if part:
             other_parts.append(part)
     if group_ids is not None:
-        part = _format_doc_field_change("group_ids", old_group_ids, group_ids)
+        part = _format_doc_field_change("group_ids", old_group_ids, group_ids, db)
         if part:
             other_parts.append(part)
 
