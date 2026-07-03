@@ -186,10 +186,31 @@ export function ECODetailModal({ ecoId, onClose, onRefresh, executionMode }: Pro
   const handleDocDownload = async (attId: string, fileName: string) => {
     try {
       const mt = await mediaApi.token(attId, 'direct-download');
+      const url = `/api/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        let detail = '';
+        try { detail = (await resp.json()).detail || ''; } catch { /* 非 JSON 错误体 */ }
+        throw new Error(`HTTP ${resp.status}${detail ? '：' + detail : ''}`);
+      }
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = `/api/attachments/${attId}/direct-download?token=${encodeURIComponent(mt)}`;
-      a.download = fileName; document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    } catch { alert('下载失败，请重试'); }
+      a.href = blobUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+      }, 200);
+    } catch (e: any) {
+      if (e?.message?.includes('403')) {
+        alert('无权限访问该附件');
+      } else {
+        alert('下载失败：' + (e?.message || '请重试'));
+      }
+    }
   };
 
   const handleDocPreview = async (attId: string, fileName: string) => {
