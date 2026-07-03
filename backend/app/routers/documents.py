@@ -23,6 +23,7 @@ from app.crud_groups import get_user_group_ids, get_document_group_ids, document
 from app.stp_converter import is_stp_file, delete_glb_cache
 from app.office_converter import is_office_file, delete_pdf_cache
 from app.crud.document import create_log, upgrade_document, get_document_versions, find_doc_refs
+from app.crud import get_logs
 
 router = APIRouter(prefix="/documents", tags=["图文档管理"])
 
@@ -501,3 +502,37 @@ async def get_document_versions_endpoint(
         "file_name": v.file_name, "file_id": v.file_id,
         "created_at": v.created_at, "updated_at": v.updated_at,
     } for v in versions]
+
+
+@router.get("/{doc_id}/logs")
+async def list_document_logs(
+    doc_id: uuid.UUID,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(require_permission("documents:read")),
+):
+    """获取图文档当前版本的操作记录（含附件操作）。"""
+    d = db.query(Document).filter(Document.id == doc_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="图文档不存在")
+    enforce_document_content_access(db, current_user, d)
+    items, total = get_logs(
+        db, skip=skip, limit=limit,
+        target_type=["document", "document_att"],
+        target_id=str(doc_id),
+    )
+    return {
+        "items": [{
+            "id": str(log.id),
+            "user_id": str(log.user_id) if log.user_id else None,
+            "username": log.username,
+            "action": log.action,
+            "target_type": log.target_type,
+            "target_id": log.target_id,
+            "detail": log.detail,
+            "ip_address": log.ip_address,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+        } for log in items],
+        "total": total,
+    }
