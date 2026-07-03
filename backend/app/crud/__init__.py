@@ -1,4 +1,6 @@
 """CRUD 聚合入口。"""
+from typing import List, Union
+
 from app.crud.user import get_user, get_user_by_username, get_users, authenticate_user, create_user, update_user, delete_user
 from app.models import OperationLog
 
@@ -26,10 +28,13 @@ def create_log(
     return db_log
 
 
-def get_logs(db, skip=0, limit=100, target_type=None, target_id=None):
+def get_logs(db, skip=0, limit=100, target_type: Union[str, List[str], None] = None, target_id=None):
     q = db.query(OperationLog)
     if target_type:
-        q = q.filter(OperationLog.target_type == target_type)
+        if isinstance(target_type, list):
+            q = q.filter(OperationLog.target_type.in_(target_type))
+        else:
+            q = q.filter(OperationLog.target_type == target_type)
     if target_id:
         q = q.filter(OperationLog.target_id == target_id)
     total = q.count()
