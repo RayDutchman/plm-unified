@@ -20,7 +20,8 @@
 | 个人区内容 | 待我处理（主角）、我的任务、最近访问、我的收藏 |
 | "最近访问"语义 | 分两期：一期用"最近编辑"（日志派生，零埋点）；二期加详情页 localStorage 埋点，升级为真浏览历史 |
 | 全局区图表 | 状态分布用**分段条**（同时对比三类实体的状态构成），非环图 |
-| 数据模型 | 不新增数据库表/字段；聚合逻辑优先复用现有接口，必要时新增"待我处理"聚合只读接口 |
+| 数据模型 | 不新增数据库表/字段；"待我处理""我的任务"因列表 brief 不含评审人/无跨项目任务接口，各需新增一个后端只读聚合接口 |
+| 待我处理覆盖范围 | 一期覆盖 ECR + ECO（待我审批 + 我发起被驳回）；构型/物料审批并入二期 |
 
 ## 3. 布局结构
 
@@ -70,23 +71,22 @@
 
 聚合我需要行动的事项，按时间/优先级排序，磁贴内直接内嵌前 4~5 条，底部"查看全部 N 项 →"跳转。每条：类型标签（ECR/ECO/构型/物料）+ 编号 + 标题 + 优先级点/状态 + 相对时间。
 
-数据来源（我 = 当前 `user_id`）：
+数据来源（我 = 当前 `user_id`）。**列表接口的 brief 响应不含 `reviewers`**，前端无法据此判断"待我审批"，故由后端新增只读聚合接口 `GET /dashboard/my-todos` 统一计算并返回：
 
-| 类型 | 判定条件 | 现有接口 |
+| 类型 | 判定条件（后端） | 期次 |
 | --- | --- | --- |
-| ECR 待我审批 | `status=reviewing` 且 `reviewers[].user_id==我` 且我尚无 `review_records` | `ecrApi.list` |
-| ECO 待我审批 | 同上（ECO） | `ecoApi.list` |
-| 构型待我审批 | 同上（`ProfileReviewer`） | `configurationProfileApi.list` |
-| 物料清单待我审批 | 同上（`InvReviewer`） | 相应 list 接口 |
-| 我发起被驳回 | `creator_id==我` 且 `status=rejected`（或 review_records 有 returned） | `ecrApi.list` / `ecoApi.list` |
+| ECR 待我审批 | `status=reviewing` 且 `reviewers` JSONB 含我 且我在 `ecr_review_records` 无记录 | 一期 |
+| ECO 待我审批 | 同上（ECO 对应表） | 一期 |
+| 我发起被驳回 | `creator_id==我` 且 `status=rejected` | 一期 |
+| 构型/物料待我审批 | 同模式（`ProfileReviewer` / `InvReviewer`） | 二期 |
 
-**实现取舍（留待实现计划定）**：优先评估前端多路 list 请求合并；若性能/分页不佳，则后端新增只读聚合接口 `GET /dashboard/my-todos`。此为实现细节，不改变本设计。
+接口返回统一结构 `{ type, kind, id, number, title, priority, status, updated_at }`，前端按 `updated_at` 倒序展示，磁贴内取前 4~5 条。
 
 ### 4.3 我的任务（宽磁贴）
 
 - 内容：指派给我且未完成的项目任务，前若干条，逾期条目标红（"逾期 N 天"）。
 - 数据：`ProjectTask` 中 `assignee_id==我` 且 `status != 已完成`；逾期 = `planned_end` 早于今天。
-- 接口：项目任务 list（按 assignee 过滤）。
+- 接口：现有 `projectApi` 只能按单个项目 `listTasks(projectId)`，无跨项目"我的任务"接口，故后端新增只读聚合接口 `GET /projects/my-tasks`，返回 `{ project_id, project_name, task_id, code, name, status, priority, planned_end }`。
 
 ### 4.4 最近访问（小方贴）
 
@@ -133,8 +133,8 @@
 
 ## 6. 分期
 
-- **一期（MVP）**：完整两区布局 + 全部磁贴，"最近访问"用"最近编辑"语义。可基于现有接口落地。
-- **二期（增量）**：详情页 localStorage 浏览埋点，"最近访问"升级为真浏览历史；如需，落地"待我处理"聚合接口。
+- **一期（MVP）**：完整两区布局 + 全部磁贴。含两个新后端聚合接口（`GET /dashboard/my-todos` 覆盖 ECR/ECO、`GET /projects/my-tasks`）。"最近访问"用"最近编辑"语义。
+- **二期（增量）**：详情页 localStorage 浏览埋点，"最近访问"升级为真浏览历史；`my-todos` 扩展覆盖构型/物料审批。
 
 ## 7. 不做（Out of Scope）
 
