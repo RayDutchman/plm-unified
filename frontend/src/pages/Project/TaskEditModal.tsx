@@ -15,6 +15,7 @@ import ConfigurationDetailModal from '../../components/Configuration/Configurati
 import ArchiveTreeModal from '../../components/ArchiveTreeModal';
 import { ECRDetailModal } from '../../components/ECR/ECRDetailModal';
 import { ECODetailModal } from '../../components/ECO/ECODetailModal';
+import OperationLogTable from '../../components/OperationLogTable';
 import type { ProjectTask, TaskType, TaskStatus, TaskPriority, TaskLink, TaskComment, TaskDependency, DepType } from '../../types/project';
 import type { OperationLog } from '../../types';
 import { formatDateTime } from '../../utils/date';
@@ -551,61 +552,7 @@ export default function TaskEditModal({ open, projectId, task, parentId, onClose
 
       {/* ───────────── 操作记录 ───────────── */}
       {task && tab === 'logs' && (
-        <div>
-          {taskLogsLoading ? (
-            <div className="text-center text-gray-400 py-8">加载中...</div>
-          ) : taskLogs.length === 0 ? (
-            <div className="text-center text-gray-400 py-8">暂无操作记录</div>
-          ) : (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              {/* 表头固定,不随列表滚动 */}
-              <table className="w-full text-sm table-fixed">
-                <colgroup>
-                  <col style={{ width: '150px' }} />
-                  <col style={{ width: '80px' }} />
-                  <col style={{ width: '96px' }} />
-                  <col />
-                </colgroup>
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">时间</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">用户</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">操作</th>
-                    <th className="text-left px-3 py-2 text-xs font-medium text-gray-500">详情</th>
-                  </tr>
-                </thead>
-              </table>
-              {/* 列表放在独立滚动容器,避免撑高弹窗;表头不在滚动区 */}
-              <div className="max-h-64 overflow-y-auto">
-                <table className="w-full text-sm table-fixed">
-                  <colgroup>
-                    <col style={{ width: '150px' }} />
-                    <col style={{ width: '80px' }} />
-                    <col style={{ width: '96px' }} />
-                    <col />
-                  </colgroup>
-                  <tbody className="divide-y divide-gray-100">
-                    {taskLogs.map((l) => (
-                      <tr key={l.id}>
-                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap align-top">{formatDateTime(l.created_at)}</td>
-                        <td className="px-3 py-2 align-top truncate">{l.username}</td>
-                        <td className="px-3 py-2 align-top">
-                          <span className={`px-2 py-0.5 text-xs rounded-full ${
-                            l.action === '创建任务' ? 'bg-green-100 text-green-800' :
-                            l.action === '删除任务' ? 'bg-red-100 text-red-800' :
-                            l.action === '任务状态变更' ? 'bg-blue-100 text-blue-800' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>{l.action}</span>
-                        </td>
-                        <td className="px-3 py-2 text-gray-500 break-words align-top">{l.detail || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
+        <OperationLogTable logs={taskLogs} loading={taskLogsLoading} />
       )}
       </div>{/* /可滚动内容区 */}
 
