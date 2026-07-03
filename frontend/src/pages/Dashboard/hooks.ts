@@ -11,7 +11,12 @@ export function useUserList(): User[] {
   useEffect(() => {
     let cancelled = false;
     usersApi.list({ page_size: 10000 })
-      .then((res) => { if (!cancelled) { const d = res.data; setUsers(Array.isArray(d) ? d : (d?.items ?? [])); } })
+      .then((res) => {
+        if (!cancelled) {
+          const d = res.data;
+          setUsers(Array.isArray(d) ? d : (d?.items ?? []));
+        }
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -55,7 +60,9 @@ export function useFavorites(limit = 6): FavItem[] {
   useEffect(() => {
     let cancelled = false;
     boardApi.getDashboard()
-      .then((res) => { if (!cancelled) setFavs(flattenFavorites(res.data, limit)); })
+      .then((res) => {
+        if (!cancelled) setFavs(flattenFavorites(res.data, limit));
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [limit]);

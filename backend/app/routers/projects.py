@@ -12,6 +12,7 @@ from app.schemas_project import (
     TaskCreate, TaskEdit, TaskStatusUpdate, TaskMove, TaskReorder, TaskLinkAdd, CommentAdd, DepCreate,
 )
 from app.permissions import require_permission, enforce_object_policy
+from app.crud.dashboard_mytasks import get_my_tasks
 
 router = APIRouter(prefix="/projects", tags=["项目管理"])
 
@@ -73,6 +74,12 @@ async def create_project(data: ProjectCreate, db: Session = Depends(get_db),
     ip = request.client.host if request and request.client else None
     create_log(db, current_user.id, current_user.username, "创建项目", "project", str(p.id), f"名称:{p.name}", ip)
     return _project_detail(db, p)
+
+
+@router.get("/my-tasks")
+async def my_tasks(db: Session = Depends(get_db),
+                   current_user: User = Depends(require_permission("project:read"))):
+    return {"items": get_my_tasks(db, current_user.id)}
 
 
 @router.get("/{project_id}")

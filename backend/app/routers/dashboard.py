@@ -10,6 +10,7 @@ from app.models import (
 from app.models.models_configuration import ConfigurationItem
 from app.permissions import require_permission, enforce_object_policy
 from app.crud import create_log
+from app.crud.dashboard_todos import get_my_todos
 
 router = APIRouter(prefix="/dashboard", tags=["用户看板"])
 
@@ -162,6 +163,10 @@ def _ensure_dashboard(db: Session, user_id: uuid.UUID) -> UserDashboard:
 
 
 # ===== 看板 =====
+
+@router.get("/my-todos")
+async def my_todos(db: Session = Depends(get_db), current_user: User = Depends(require_permission("dashboard:read"))):
+    return {"items": get_my_todos(db, current_user.id)}
 
 @router.get("/")
 async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(require_permission("dashboard:read"))):

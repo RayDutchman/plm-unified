@@ -878,3 +878,25 @@ export interface InvDocument {
   created_at?: string; updated_at?: string;
 }
 
+export interface MyTodoItem {
+  type: 'ecr' | 'eco';
+  kind: 'review' | 'rejected';
+  id: string;
+  number: string;
+  title: string;
+  priority: string;
+  status: string;
+  updated_at: string | null;
+}
+
+export interface MyTaskItem {
+  project_id: string;
+  project_name: string;
+  task_id: string;
+  code: string;
+  name: string;
+  status: string;
+  priority: string;
+  planned_end: string | null;
+}
+

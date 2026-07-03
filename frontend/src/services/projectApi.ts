@@ -43,4 +43,5 @@ export const projectApi = {
   addDep: (id: string, data: { predecessor_id: string; successor_id: string; dep_type?: string; lag_days?: number }) =>
     api.post(`${base}/${id}/deps`, data),
   removeDep: (id: string, depId: string) => api.delete(`${base}/${id}/deps/${depId}`),
+  myTasks: () => api.get(`${base}/my-tasks`),
 };
