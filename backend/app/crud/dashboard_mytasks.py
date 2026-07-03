@@ -7,22 +7,26 @@ _DONE = {"已完成"}
 
 def get_my_tasks(db: Session, user_id):
     rows = (
-        db.query(ProjectTask, Project.name, Project.id)
+        db.query(ProjectTask, Project.name, Project.code, Project.id)
         .join(Project, Project.id == ProjectTask.project_id)
         .filter(ProjectTask.assignee_id == user_id)
         .filter(~ProjectTask.status.in_(_DONE))
         .all()
     )
     out = []
-    for task, project_name, project_id in rows:
+    for task, project_name, project_code, project_id in rows:
         out.append({
             "project_id": str(project_id),
+            "project_code": project_code,
             "project_name": project_name,
             "task_id": str(task.id),
             "code": task.code,
             "name": task.name,
+            "task_type": task.task_type,
             "status": task.status,
             "priority": task.priority,
+            "planned_start": task.planned_start.isoformat() if task.planned_start else None,
             "planned_end": task.planned_end.isoformat() if task.planned_end else None,
+            "description": task.description,
         })
     return out

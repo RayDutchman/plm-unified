@@ -47,11 +47,13 @@ def _task(db, project_id, **kw):
 
 def test_assigned_unfinished_included(db, me):
     p = _project(db, me)
-    _task(db, p.id, assignee_id=me.id, status="进行中")
+    _task(db, p.id, assignee_id=me.id, status="进行中", task_type="里程碑")
     tasks = get_my_tasks(db, me.id)
     assert len(tasks) == 1
     assert tasks[0]["project_name"] == "项目一"
+    assert tasks[0]["project_code"] == "PRJ-1"
     assert tasks[0]["name"] == "任务一"
+    assert tasks[0]["task_type"] == "里程碑"
 
 
 def test_finished_excluded(db, me):

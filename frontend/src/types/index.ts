@@ -891,12 +891,16 @@ export interface MyTodoItem {
 
 export interface MyTaskItem {
   project_id: string;
+  project_code: string;
   project_name: string;
   task_id: string;
   code: string;
   name: string;
+  task_type: string;
   status: string;
   priority: string;
+  planned_start: string | null;
   planned_end: string | null;
+  description: string | null;
 }
 
